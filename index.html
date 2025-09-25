@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatyni V2</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+
+    <div id="custom-cursor" class="custom-cursor"></div>
+
+    <div id="sidebar-overlay"></div>
+
+    <div id="initial-view">
+        <canvas id="particle-canvas"></canvas>
+        <div class="intro-container">
+            <div class="intro-logo">CHATYNI</div>
+            <h2 class="intro-subtitle">A NOVA ERA</h2>
+            <button id="startButton" class="intro-button">ENTRAR</button>
+        </div>
+    </div> 
+
+    <div id="progressContainer" class="progress-container">
+        <div class="progress-bar-wrapper">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText" class="progress-text">Iniciando...</p>
+    </div>
+
+    <button class="hamburger-menu" id="hamburgerMenu">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <div id="connection-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Desconectado</span>
+    </div>
+
+    <nav id="sidebar" class="sidebar">
+        <ul>
+            <li id="nav-login"><a href="javascript:void(0);" data-target="loginContent"><span class="icon">👤</span><span class="text" data-translate-key="navLogin">Login / Cadastrar</span></a></li>
+            <li id="nav-chat"><a href="javascript:void(0);" data-target="chatContent"><span class="icon">💬</span><span class="text">Chat Global</span></a></li>
+            <li id="nav-story"><a href="javascript:void(0);" data-target="storyContent"><span class="icon">📖</span><span class="text" data-translate-key="navStory">História</span></a></li>
+            <li><a href="#"><span class="icon">📜</span><span class="text">Script</span></a></li>
+            <li id="nav-credits"><a href="javascript:void(0);" data-target="creditsContent"><span class="icon">🏆</span><span class="text">Créditos</span></a></li>
+            <li><a href="#"><span class="icon">🚀</span><span class="text">Executores</span></a></li>
+            <li id="nav-support"><a href="javascript:void(0);" data-target="supportContent"><span class="icon">?</span><span class="text">Suporte</span></a></li>
+            <li id="nav-rpg" class="hidden"><a href="javascript:void(0);" data-target="rpgContent"><span class="icon">⚔️</span><span class="text">Mundo RPG</span></a></li>
+            <li id="nav-guild" class="hidden"><a href="javascript:void(0);" data-target="guildContent"><span class="icon">🏰</span><span class="text">Guilda</span></a></li>
+            <li id="nav-my-ticket" class="hidden"><a href="javascript:void(0);"><span class="icon">🎫</span><span class="text">Meu Ticket Aberto</span></a></li>
+            <li id="nav-settings" class="hidden"><a href="javascript:void(0);" data-target="settingsContent"><span class="icon">🔧</span><span class="text" data-translate-key="navSettings">Configurações</span></a></li>
+            <li id="nav-logout" class="hidden"><a href="javascript:void(0);" data-action="logout"><span class="icon">🚪</span><span class="text" data-translate-key="navLogout">Logout</span></a></li>
+            <li id="nav-admin" class="hidden"><a href="javascript:void(0);" data-target="adminContent"><span class="icon">🛡️</span><span class="text" data-translate-key="navAdmin">Painel Admin</span></a></li>
+            <li id="nav-tester" class="hidden"><a href="javascript:void(0);" data-target="testerContent"><span class="icon">🧪</span><span class="text">Painel Tester</span></a></li>
+        </ul>
+
+    </nav>
+
+    <main id="content-area"> <!-- Este é o container principal para todos os painéis -->
+        <!-- Painel de Login/Cadastro -->
+        <div id="loginContent" class="content-panel">
+            <!-- Formulário de Login -->
+            <form id="loginForm" class="auth-form show">
+                <h1 data-translate-key="loginTitle">Login</h1>
+                <input type="email" id="loginEmail" placeholder="Email" data-translate-placeholder-key="loginEmailPlaceholder" required>
+                <input type="password" id="loginPassword" placeholder="Senha" data-translate-placeholder-key="loginPasswordPlaceholder" required>
+                <button type="submit" class="rgb-button" data-translate-key="loginButton">Entrar</button>
+                <p><span data-translate-key="loginNoAccount">Não tem uma conta?</span> <a href="javascript:void(0);" id="showSignup" data-translate-key="loginSignUpLink">Cadastre-se</a> | <a href="javascript:void(0);" id="showRecover" data-translate-key="loginRecoverLink">Recuperar conta</a> | <a href="javascript:void(0);" id="showTokenLogin">Logar com Token</a></p>
+            </form>
+            <!-- Formulário de Cadastro -->
+            <form id="signupForm" class="auth-form">
+                <h1 data-translate-key="signupTitle">Cadastro</h1>
+                <input type="text" id="signupUsername" placeholder="Nome de usuário" data-translate-placeholder-key="signupUsernamePlaceholder" required>
+                <input type="email" id="signupEmail" placeholder="Email" data-translate-placeholder-key="loginEmailPlaceholder" required>
+                <input type="password" id="signupPassword" placeholder="Senha" data-translate-placeholder-key="loginPasswordPlaceholder" required>
+                <select id="signupSecurityQuestion" required>
+                    <option value="" disabled selected>Escolha uma pergunta de segurança</option>
+                    <option value="Qual o nome do seu primeiro animal de estimação?">Qual o nome do seu primeiro animal de estimação?</option>
+                    <option value="Qual o nome de solteira da sua mãe?">Qual o nome de solteira da sua mãe?</option>
+                    <option value="Em que cidade você nasceu?">Em que cidade você nasceu?</option>
+                </select>
+                <input type="text" id="signupSecurityAnswer" placeholder="Sua resposta secreta" required>
+                <button type="submit" class="rgb-button" data-translate-key="signupButton">Criar Conta</button>
+                <p><span data-translate-key="signupHaveAccount">Já tem uma conta?</span> <a href="javascript:void(0);" id="showLogin" data-translate-key="signupLoginLink">Faça login</a></p>
+            </form>
+        </div>
+
+        <!-- Painel de Boas-Vindas (Logado) -->
+        <div id="welcomeContent" class="content-panel">
+            <h1>Bem vindo, <span id="welcomeUsername" class="rgb-highlight"></span></h1>
+        </div>
+
+        <!-- Painel da História -->
+        <div id="storyContent" class="content-panel">
+            <h1 data-translate-key="storyTitle">A Remasterização do Chatyni</h1>
+            <p>
+                A jornada para o Chatyni V2 começou nas <span class="rgb-highlight">cinzas do seu antecessor</span>, o V1.
+                Nascido como um simples experimento, o Chatyni V1 provou que a ideia tinha potencial.
+                No entanto, ele era um reflexo de sua própria criação apressada: <span class="rgb-highlight">lento, com uma interface datada</span> e funcionalidades limitadas.
+                A comunidade, embora pequena, via o que ele poderia se tornar e suas vozes foram o <span class="rgb-highlight">catalisador para a mudança</span>.
+                Não bastava apenas aplicar um curativo; uma simples atualização não corrigiria as falhas fundamentais em sua arquitetura.
+                A decisão foi tomada: uma <span class="rgb-highlight">remasterização completa, do zero</span>.
+                O objetivo era claro: criar uma plataforma que não fosse apenas funcional, mas também uma <span class="rgb-highlight">alegria de usar</span>.
+                Velocidade, fluidez e um design moderno tornaram-se os pilares do novo projeto.
+                Noites foram gastas reescrevendo cada linha de código, otimizando o motor de renderização para as <span class="rgb-highlight">animações suaves que você vê hoje</span>.
+                O antigo sistema foi descartado em favor de uma base modular, permitindo a fácil integração de scripts e executores.
+                A interface escura, o fundo animado e os efeitos RGB não são apenas enfeites.
+                Eles representam a nova filosofia do Chatyni: uma <span class="rgb-highlight">ferramenta poderosa que também é esteticamente agradável</span>.
+                Cada transição, cada gradiente, foi pensado para criar uma experiência imersiva.
+                A barra de progresso que você viu não simboliza apenas um carregamento.
+                Ela representa a <span class="rgb-highlight">transição do velho para o novo</span>, o progresso que foi feito.
+                A introdução do menu lateral e a separação da interface principal foram passos cruciais.
+                Isso abriu caminho para um futuro onde novas funcionalidades podem ser adicionadas sem comprometer a estabilidade.
+                O Chatyni V2 é, portanto, mais do que uma sequência.
+                É uma <span class="rgb-highlight">reimaginação, uma promessa cumprida</span> àqueles que acreditaram no potencial inicial.
+                É a fundação sobre a qual construiremos o futuro, juntos.
+                Bem-vindo à <span class="rgb-highlight">nova era</span>.
+            </p>
+        </div>
+
+        <!-- Painel de Configurações -->
+        <div id="settingsContent" class="content-panel">
+            <h1 data-translate-key="settingsTitle">Configurações</h1>
+
+            <div class="settings-container">
+                <div class="settings-tabs">
+                    <button class="settings-tab-btn active" data-tab="profile">Perfil</button>
+                    <button class="settings-tab-btn" data-tab="security">Segurança</button>
+                    <button class="settings-tab-btn" data-tab="appearance">Aparência</button>
+                </div>
+
+                <!-- Aba de Perfil -->
+                <div class="settings-tab-content active" id="tab-profile">
+                    <div class="profile-pic-container">
+                        <img src="https://via.placeholder.com/120" alt="Foto de Perfil" id="profilePic">
+                        <input type="file" id="profilePicInput" class="hidden" accept="image/*">
+                        <button class="change-pic-btn" title="Alterar foto" data-translate-key="settingsProfileChange"></button>
+                    </div>
+                    <div class="setting-group">
+                        <label for="username-change" data-translate-key="settingsUsernameLabel">Nome de Usuário</label>
+                        <div class="input-with-button">
+                            <input type="text" id="username-change" placeholder="Seu nome aqui">
+                            <button id="saveUsernameBtn" class="setting-save-btn" data-translate-key="settingsSaveButton">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aba de Segurança -->
+                <div class="settings-tab-content" id="tab-security">
+                    <div class="setting-group">
+                        <label>Alterar Senha</label>
+                        <input type="password" id="currentPassword" placeholder="Senha atual">
+                        <input type="password" id="newPassword" placeholder="Nova senha">
+                        <input type="password" id="confirmNewPassword" placeholder="Confirmar nova senha">
+                        <button id="savePasswordBtn" class="setting-save-btn full-width" data-translate-key="settingsSavePasswordButton">Salvar Nova Senha</button>
+                    </div>
+                </div>
+
+                <!-- Aba de Aparência -->
+                <div class="settings-tab-content" id="tab-appearance">
+                    <div class="setting-group">
+                        <label data-translate-key="settingsAppearanceTitle">Tema e Idioma</label>
+                        <div class="setting-item">
+                            <label for="themeToggle" data-translate-key="settingsTheme">Modo Escuro</label>
+                            <label class="switch"><input type="checkbox" id="themeToggle"><span class="slider round"></span></label>
+                        </div>
+                        <div class="setting-item">
+                            <label for="languageSelector" data-translate-key="settingsLanguage">Idioma</label>
+                            <select id="languageSelector"><option value="pt">Português</option><option value="en">English</option></select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel de Recuperação de Conta -->
+        <div id="recoverContent" class="content-panel">
+            <form id="recoverForm" class="auth-form show">
+                <div id="recover-step-1">
+                    <h1 data-translate-key="recoverTitle">Recuperar Conta</h1>
+                    <p class="recover-text">Insira seu email para iniciar a recuperação.</p>
+                    <input type="email" id="recoverEmail" placeholder="Email" required>
+                    <button type="submit" class="rgb-button">Próximo</button>
+                    <p><a href="javascript:void(0);" id="backToLogin" data-translate-key="recoverBackToLogin">Voltar para o login</a></p>
+                </div>
+                <div id="recover-step-2" class="hidden">
+                    <h1>Pergunta de Segurança</h1>
+                    <p id="securityQuestionText" class="recover-text">...</p>
+                    <input type="text" id="securityAnswerInput" placeholder="Sua resposta secreta" required>
+                    <button type="button" id="validateAnswerBtn" class="rgb-button">Verificar Resposta</button>
+                    <p><a href="javascript:void(0);" id="backToLoginFromRecover">Voltar para o login</a></p>
+                </div>
+            </form>
+        </div>
+
+        <!-- Painel de Reset de Senha -->
+        <div id="resetPasswordContent" class="content-panel">
+            <form id="resetPasswordForm" class="auth-form show">
+                <h1 data-translate-key="resetPasswordTitle">Redefinir Senha</h1>
+                <p class="recover-text" data-translate-key="resetPasswordInstructions">Crie uma nova senha para sua conta.</p>
+                <input type="password" id="resetNewPassword" placeholder="Nova Senha" data-translate-placeholder-key="loginPasswordPlaceholder" required>
+                <input type="password" id="resetConfirmPassword" placeholder="Confirmar Nova Senha" data-translate-placeholder-key="resetConfirmPasswordPlaceholder" required>
+                <button type="submit" class="rgb-button" data-translate-key="resetPasswordButton">Salvar Nova Senha</button>
+            </form>
+        </div>
+
+        <!-- Painel do Chat Global -->
+        <div id="chatContent" class="content-panel">
+            <!-- Formulário para inserir nome do Roblox -->
+            <div id="roblox-login-view">
+                <form id="robloxUsernameForm" class="auth-form show">
+                    <h1>Entrar no Chat Global</h1>
+                    <p>Digite seu nome de usuário do Roblox para usar seu avatar como foto de perfil.</p>
+                    <input type="text" id="robloxUsernameInput" placeholder="Nome de usuário do Roblox" required>
+                    <button type="submit" class="rgb-button">Buscar e Entrar</button>
+                </form>
+            </div>
+            <!-- Visualização do Chat -->
+            <div id="chat-view" class="hidden">
+                <h1>Chat Global</h1>
+                <div id="chat-messages"></div>
+                <form id="chat-form">
+                    <input type="text" id="chat-input" placeholder="Digite sua mensagem..." autocomplete="off" required>
+                    <button type="submit">Enviar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Painel de Admin -->
+        <div id="adminContent" class="content-panel">
+            <h1>Painel de Administração</h1>
+            <p>Gerenciamento de tickets de suporte e usuários do sistema.</p>
+
+            <!-- Container de Tickets de Suporte -->
+            <div class="support-ticket-container" style="width: 100%; margin-bottom: 20px;">
+                <h2>Tickets de Suporte</h2>
+                <table class="ticket-table">
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Categoria</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="support-ticket-table-body">
+                        <!-- Linhas dos tickets serão inseridas aqui pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="admin-panel-layout">
+                <div class="user-list-container">
+                    <h2>Lista de Usuários</h2>
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>Usuário</th>
+                                <th>IP</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-table-body">
+                            <!-- Os usuários registrados serão inseridos aqui pelo JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ip-ban-container">
+                    <h2>Gerenciamento de IP</h2>
+                    <form id="ipBanForm">
+                        <input type="text" id="ipBanInput" placeholder="Digite o IP para banir/desbanir" required>
+                        <button type="submit" class="admin-btn ban">Banir/Desbanir IP</button>
+                    </form>
+                    <h3>IPs Banidos Atualmente:</h3>
+                    <ul id="bannedIpList">
+                        <!-- Lista será preenchida por JS -->
+                    </ul>
+                </div>
+            </div>
+            <div id="supreme-admin-self-panel" class="hidden">
+                <h2>Meu Painel (Supremo)</h2>
+                <form id="supreme-admin-self-form">
+                    <div class="setting-group">
+                        <label for="my-level-input">Meu Nível</label>
+                        <input type="number" id="my-level-input" class="admin-input">
+                    </div>
+                    <div class="setting-group">
+                        <label>Meus Personagens</label>
+                        <div id="my-characters-checklist" class="character-checklist">
+                            <!-- Checkboxes serão populados pelo JS -->
+                        </div>
+                    </div>
+                    <button type="submit" class="admin-btn promote">Salvar Minhas Alterações</button>
+                </form>
+                <h3 style="margin-top: 2rem; color: #ffd700; border-top: 1px solid #444; padding-top: 1rem;">Doar para Jogador</h3>
+                <form id="supreme-admin-donate-form">
+                    <div class="setting-group">
+                        <label for="donate-username-input">Nome do Jogador</label>
+                        <input type="text" id="donate-username-input" class="admin-input" placeholder="Nome do jogador alvo" required>
+                    </div>
+                    <div class="setting-group" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;"><label for="donate-xp-input">XP para doar</label><input type="number" id="donate-xp-input" class="admin-input" placeholder="0"></div>
+                        <div style="flex: 1;"><label for="donate-coins-input">Moedas para doar</label><input type="number" id="donate-coins-input" class="admin-input" placeholder="0"></div>
+                    </div>
+                    <div class="setting-group">
+                        <label for="donate-message-input">Mensagem Privada (Opcional)</label>
+                        <textarea id="donate-message-input" class="admin-input" placeholder="Uma mensagem para o jogador..."></textarea>
+                    </div>
+                    <button type="submit" class="admin-btn promote">Enviar Doação</button>
+                </form>
+            </div>
+            <div class="admin-actions-extra">
+                <button id="impersonateTesterBtn" class="admin-btn promote">Entrar na conta Tester</button>
+            </div>
+        </div>
+
+        <!-- Painel de Conta Excluída -->
+        <div id="deletedContent" class="content-panel">
+            <div class="auth-form show">
+                <h1>Sua conta foi encerrada</h1>
+                <p>Motivo: <span id="deletedReason"></span></p>
+                <p class="recover-text">Não toleramos comportamentos assim.</p>
+                <button id="deletedLogoutBtn" class="rgb-button">Sair da conta</button>
+            </div>
+        </div>
+
+        <!-- Painel de Banimento -->
+        <div id="bannedContent" class="content-panel">
+            <div class="auth-form show">
+                <h1>Você Foi Banido</h1>
+                <p>Sua conta foi suspensa.</p>
+                <div class="ban-details">
+                    <p><strong>Banido por:</strong> <span id="bannedBy"></span></p>
+                    <p><strong>Motivo:</strong> <span id="banReason"></span></p>
+                    <p><strong>O ban expira em:</strong> <span id="banExpires"></span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel de Desbanimento/Reativação -->
+        <div id="unbannedContent" class="content-panel">
+            <div class="unban-panel">
+                <h1>Você foi Libertado!</h1>
+                <p>Sua conta foi desbanida com sucesso e está pronta para ser reativada.</p>
+                <p>Clique no botão abaixo para retornar à tela de login e entrar novamente em sua jornada.</p>
+                <button id="reactivateAccountBtn" class="rgb-button">Voltar ao Login</button>
+            </div>
+        </div>
+
+        <!-- Painel Tester -->
+        <div id="testerContent" class="content-panel">
+            <form id="sendImageForm" class="auth-form show">
+                <h1>Painel Tester</h1>
+                <p>Ferramentas especiais para testers.</p>
+                <label for="imageUrlInput">Enviar Imagem no Chat Global</label>
+                <input type="url" id="imageUrlInput" placeholder="https://exemplo.com/imagem.png" required>
+                <button type="submit" class="rgb-button">Enviar Imagem</button>
+            </form>
+            <form id="kickUserForm" class="auth-form show" style="margin-top: 20px;">
+                <h1>Ferramentas de Moderação</h1>
+                <label for="kickIpInput">Kickar Usuário por IP (em tempo real)</label>
+                <input type="text" id="kickIpInput" placeholder="127.0.0.1" required>
+                <button type="submit" class="rgb-button">Kickar Usuário</button>
+            </form>
+        </div>
+
+        <!-- Painel de Suporte -->
+        <div id="supportContent" class="content-panel">
+            <h1>Central de Suporte</h1>
+            <form id="supportForm" class="support-form">
+                <div id="support-email-group" class="hidden">
+                    <label for="support-email">Seu Email para Contato:</label>
+                    <input type="email" id="support-email" name="email" placeholder="email@exemplo.com" style="margin-top: 10px;">
+                </div>
+                <label for="support-category">Selecione o tipo de problema:</label>
+                <select id="support-category" name="category">
+                    <option value="Conta hackeada">Conta hackeada</option>
+                    <option value="Erros / Bugs">Erros / Bugs</option>
+                    <option value="Como ir no chat global">Como ir no chat global</option>
+                    <option value="Regras">Regras</option>
+                    <option value="Direitos DMCA">Direitos DMCA</option>
+                </select>
+                <label for="support-description">Descreva seu problema:</label>
+                <textarea id="support-description" name="description" placeholder="Por favor, forneça o máximo de detalhes possível..." required></textarea>
+                <button type="submit" class="rgb-button">Enviar Ticket</button>
+            </form>
+        </div>
+
+        <!-- Painel do Mundo RPG -->
+        <div id="rpgContent" class="content-panel">
+            <h1>Mundo RPG</h1>
+
+            <!-- Painel Admin RPG (admind0lu) -->
+            <div id="rpg-admin-panel" class="hidden">
+                <h2>admind0lu</h2>
+                <div class="rpg-admin-actions">
+                    <button id="rpg-admin-nuke-btn" class="rpg-admin-btn">Lançar Nuke ☢️</button>
+                    <button id="rpg-admin-godmode-btn" class="rpg-admin-btn">Ativar God Mode</button>
+                    <form id="rpg-admin-donate-form">
+                        <input type="number" id="rpg-admin-donate-xp" placeholder="Doar XP">
+                        <input type="number" id="rpg-admin-donate-coins" placeholder="Doar Moedas">
+                        <button type="submit" class="rpg-admin-btn">Doar para si</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="rpg-layout">
+                <div class="rpg-character-roll-container">
+                    <h2>Taverna de Heróis</h2>
+                    <p>Gaste moedas para recrutar um novo herói para sua equipe! Cada rolagem custa 100 moedas.</p>
+                    <div class="roll-chances-container">
+                        <span class="rarity-common">Comum: 60%</span> |
+                        <span class="rarity-uncommon">Incomum: 25%</span> |
+                        <span class="rarity-rare">Raro: 10%</span> |
+                        <span class="rarity-mythic">Mítico: 4.5%</span> |
+                        <span class="rarity-chatynirare">Chatynirare: 0.5%</span>
+                    </div>
+                    <button id="rpg-roll-character-btn" class="rpg-action-btn">Rolar Personagem (100 🪙)</button>
+                </div>
+
+                <div class="rpg-stats-container">
+                    <h2>Seus Atributos</h2>
+                    <div class="rpg-stat">Nível: <span id="rpg-level">--</span></div>
+                    <div class="rpg-stat">XP: <span id="rpg-xp">--</span> / <span id="rpg-xp-next">--</span></div>
+                    <div class="rpg-stat">Moedas: <span id="rpg-coins">--</span> 🪙</div>
+                    <hr>
+                    <h3>Status</h3>
+                    <div class="rpg-stat">Força: <span id="rpg-stat-strength">--</span></div>
+                    <div class="rpg-stat">Destreza: <span id="rpg-stat-dexterity">--</span></div>
+                    <div class="rpg-stat">Inteligência: <span id="rpg-stat-intelligence">--</span></div>
+                    <div class="rpg-stat">🛡️ Defesa: <span id="rpg-stat-defense">--</span></div>
+                    <div class="rpg-stat">Arma: <span id="rpg-equipped-weapon">Nenhuma</span></div>
+                </div>
+                <div class="rpg-actions-container">
+                    <h2>Aventura</h2>
+                    <p>Enfrente monstros para ganhar experiência e recompensas.</p>
+                    <!-- Painel do Chefe Mundial (escondido por padrão) -->
+                    <div id="world-boss-panel" class="hidden" style="background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4444; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
+                        <h3 id="world-boss-name" style="margin-top: 0; color: #ff6666;">--</h3>
+                        <div class="hp-bar-container" style="height: 25px;">
+                            <div id="world-boss-hp-bar" class="hp-bar"></div>
+                        </div>
+                        <p id="world-boss-hp-text" style="font-weight: bold; color: #fff;">-- / --</p>
+                        <button id="world-boss-attack-btn" class="rpg-action-btn boss-btn">Atacar Chefe</button>
+                    </div>
+                    <!-- Fim do Painel do Chefe Mundial -->
+                    <button id="rpg-fight-btn" class="rpg-action-btn">Procurar Batalha</button>
+                    <button id="rpg-enter-dungeon-btn" class="rpg-action-btn dungeon-btn">Entrar na Caverna</button>
+                    <button id="rpg-fight-boss-btn" class="rpg-action-btn boss-btn">Lutar contra Chefe (Grupo)</button>
+                    <div id="rpg-log-container">
+                        <h3>Log de Batalha</h3>
+                        <div id="rpg-log">
+                            Bem-vindo à sua aventura!
+                        </div>
+                    </div>
+                </div>
+                <div class="rpg-shop-container">
+                    <h2>Loja de Itens</h2>
+                    <p>Gaste suas moedas para ficar mais forte!</p>
+                    <ul id="rpg-shop-items">
+                        <!-- Itens serão populados pelo client.js -->
+                    </ul>
+                </div>
+                <div class="rpg-armory-container">
+                    <h2>🛡️ Armaria</h2>
+                    <p>Forje armas poderosas para suas aventuras.</p>
+                    <ul id="rpg-armory-items">
+                        <!-- Itens serão populados pelo client.js -->
+                    </ul>
+                </div>
+                <div class="rpg-stock-container">
+                    <h2>Estoque de Armas (Reinicia a cada 20 min)</h2>
+                    <p>Armas raras podem aparecer aqui. Fique de olho!</p>
+                    <ul id="rpg-stock-items">
+                        <!-- Itens do estoque serão populados aqui -->
+                    </ul>
+                </div>
+                <div class="rpg-ranking-container">
+                    <h2>🏆 Ranking de Jogadores</h2>
+                    <p>Os 10 melhores aventureiros.</p>
+                    <ol id="rpg-ranking-list">
+                        <!-- Ranking será populado pelo client.js -->
+                    </ol>
+                </div>
+                <div class="rpg-inventory-container">
+                    <h2>🎒 Inventário</h2>
+                    <p>Itens que você pode usar em suas aventuras.</p>
+                    <ul id="rpg-inventory-list">
+                        <!-- Itens serão populados pelo client.js -->
+                    </ul>
+                </div>
+                <div class="rpg-quest-container">
+                    <h2>📜 Missão Diária</h2>
+                    <div id="daily-quest-content">
+                        <!-- Conteúdo da missão será populado pelo client.js -->
+                        <p id="quest-description">Carregando missão...</p>
+                        <div class="quest-progress-bar-outer">
+                            <div id="quest-progress-bar-inner"></div>
+                        </div>
+                        <p id="quest-progress-text">--/--</p>
+                        <button id="quest-claim-btn" class="rpg-action-btn" disabled>
+                            Em Progresso...
+                        </button>
+                    </div>
+                </div>
+
+                <div class="rpg-character-collection-container">
+                    <h2>Meus Heróis</h2>
+                    <div id="rpg-character-list">
+                        <p>Você ainda não recrutou nenhum herói. Tente a sorte na Taverna!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel de Créditos -->
+        <div id="creditsContent" class="content-panel">
+            <h1>Créditos</h1>
+            <div class="credits-box">
+                <p class="credit-line">CRIADO POR</p>
+                <p class="credit-name dolly-rgb">D0LLY</p>
+                <p class="credit-details">[frontend & backend]</p>
+                <p class="credit-server">Servidor utilizado: Render</p>
+            </div>
+        </div>
+
+        <!-- Painel da Guilda -->
+        <div id="guildContent" class="content-panel">
+            <!-- Visão para quem não está em uma guilda -->
+            <div id="no-guild-view" class="hidden">
+                <h1>Junte-se a uma Guilda</h1>
+                <div class="guild-layout">
+                    <div class="guild-creation-form">
+                        <h3>Criar uma nova Guilda (Custo: 100 🪙)</h3>
+                        <form id="guild-create-form">
+                            <input type="text" id="guild-create-name" placeholder="Nome da Guilda" required>
+                            <input type="text" id="guild-create-tag" placeholder="TAG (max 5)" maxlength="5" required>
+                            <button type="submit" class="rpg-action-btn">Criar Guilda</button>
+                        </form>
+                    </div>
+                    <div class="guild-list-container">
+                        <h3>Guildas Disponíveis</h3>
+                        <ul id="guild-list"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visão para quem está em uma guilda -->
+            <div id="guild-view" class="hidden">
+                <div class="guild-main-header">
+                    <h1 id="guild-view-name">--</h1>
+                    <span id="guild-view-tag" class="guild-tag">--</span>
+                </div>
+                <div class="guild-tabs">
+                    <button class="guild-tab-btn active" data-tab="guild-news"><span class="icon">📰</span>Notícias</button>
+                    <button class="guild-tab-btn" data-tab="guild-chat-container"><span class="icon">💬</span>Chat</button>
+                    <button class="guild-tab-btn" data-tab="guild-members"><span class="icon">👥</span>Membros</button>
+                    <button id="guild-admin-tab-btn" class="guild-tab-btn hidden" data-tab="guild-admin"><span class="icon">🛡️</span>Admin</button>
+                </div>
+                <div class="guild-tab-content active" id="guild-news">
+                    <h2>Notícias da Guilda</h2>
+                    <ul id="guild-news-list"></ul>
+                </div>
+                <div class="guild-tab-content" id="guild-chat-container">
+                    <div id="guild-chat-messages"></div>
+                    <form id="guild-chat-form">
+                        <input type="text" id="guild-chat-input" placeholder="Digite sua mensagem na guilda..." autocomplete="off" required>
+                        <button type="submit">Enviar</button>
+                    </form>
+                </div>
+                <div class="guild-tab-content" id="guild-members">
+                    <h2>Membros (<span id="guild-view-member-count">0</span>)</h2>
+                    <ul id="guild-members-list"></ul>
+                </div>
+                <div class="guild-tab-content" id="guild-admin">
+                    <h2>Painel de Admin da Guilda</h2>
+                    <div class="guild-admin-section">
+                        <h3>Configurações da Guilda</h3>
+                        <form id="guild-settings-form">
+                            <div class="setting-item"><label for="guild-private-checkbox">Guilda Privada</label><label class="switch"><input type="checkbox" id="guild-private-checkbox"><span class="slider round"></span></label></div>
+                            <div id="guild-invite-code-container" class="hidden"><label for="guild-invite-code-input">Código de Convite</label><input type="text" id="guild-invite-code-input"></div>
+                            <button type="submit" class="rpg-action-btn">Salvar Configurações</button>
+                        </form>
+                    </div>
+                    <div id="guild-admin-news-form" class="guild-admin-section"><h3>Adicionar Notícia</h3><form id="guild-add-news-form"><textarea id="guild-add-news-text" placeholder="Escreva a notícia aqui..." required></textarea><button type="submit">Publicar</button></form></div>
+                    <div class="guild-admin-section"><h3>Ações Perigosas</h3><button id="guild-disband-btn" class="admin-btn ban">Disbandar Guilda</button></div>
+                </div>
+                <button id="guild-leave-btn" class="admin-btn ban" style="margin-top: 20px;">Sair da Guilda</button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal de Batalha -->
+    <div id="battle-modal-overlay" class="hidden">
+        <div id="battle-modal-container">
+            <div class="battle-scene">
+                <div id="battle-party-container" class="battle-party-container">
+                    <!-- Cards dos jogadores do grupo serão inseridos aqui -->
+                </div>
+                <div class="battle-participant monster">
+                    <h3 id="monster-name">--</h3>
+                    <div class="hp-bar-container"><div id="monster-hp-bar" class="hp-bar"></div></div>
+                    <p id="monster-hp-text">-- / --</p>
+                    <img id="monster-image" src="https://i.imgur.com/M0F4S2g.png" alt="Monstro" class="monster-sprite">
+                </div>
+            </div>
+            <div id="battle-log-container"><div id="battle-log"></div></div>
+            <div id="battle-controls">
+                <div id="battle-actions">
+                    <button class="battle-action-btn" data-action="attack">⚔️ Atacar</button>
+                    <button class="battle-action-btn" data-action="defend">🛡️ Defender</button>
+                    <button id="battle-show-items-btn" class="battle-action-btn item hidden">🎒 Itens</button>
+                    <button id="battle-show-abilities-btn" class="battle-action-btn ability hidden">✨ Habilidades</button>
+                    <button id="battle-flee-btn" class="battle-action-btn flee">🏃 Fugir</button>
+                </div>
+                <div id="battle-ability-list" class="hidden">
+                    <!-- Habilidades serão populadas pelo JS -->
+                </div>
+                <div id="battle-item-list" class="hidden">
+                    <!-- Itens usáveis serão populados pelo JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Genérico -->
+    <div id="modal-overlay" class="hidden">
+        <div id="modal-container">
+            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            <h2 id="modal-title"></h2>
+            <div id="modal-content"></div>
+            <div id="modal-actions">
+                <button id="modal-cancel-btn" class="modal-btn">Cancelar</button>
+                <button id="modal-confirm-btn" class="modal-btn primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="client.js" defer></script>
+
+</body>
+</html>
