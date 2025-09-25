@@ -321,98 +321,122 @@ function getTodayDateString() {
 
 const KRAZYMAX_GUILD_ID = 'krazymax-default-guild-id';
 
-// --- Banco de Dados Simulado para Guildas ---
-let guilds = [
-    {
-        id: KRAZYMAX_GUILD_ID,
-        name: 'krazymax',
-        tag: 'KZYMX',
-        owner: 'dollyadm',
-        members: ['dollyadm', 'Tester'],
-        isPrivate: true,
-        inviteCode: '582p0d0lly',
-        news: [{
-            id: crypto.randomBytes(4).toString('hex'),
-            text: 'Bem-vindo à guilda Krazymax!',
-            author: 'Sistema',
-            date: new Date()
-        }],
-        bannedMembers: [],
-        mutedMembers: {},
-        createdAt: new Date(),
-    }
-];
+async function initializeDatabase() {
+    const client = await pool.connect();
+    try {
+        // Tabela de Usuários
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                "passwordHash" VARCHAR(255) NOT NULL,
+                "isAdmin" BOOLEAN DEFAULT false,
+                "isSupremeAdmin" BOOLEAN DEFAULT false,
+                "isTester" BOOLEAN DEFAULT false,
+                ip VARCHAR(50),
+                status VARCHAR(20) DEFAULT 'active',
+                "avatarUrl" TEXT,
+                rpg JSONB,
+                "banDetails" JSONB,
+                "recoveryToken" VARCHAR(255),
+                "recoveryTokenExpires" TIMESTAMP,
+                "securityQuestion" TEXT,
+                "securityAnswerHash" VARCHAR(255),
+                "discordId" VARCHAR(50),
+                "robloxUsername" VARCHAR(100)
+            );
+        `);
 
-// --- Banco de Dados Simulado ---
-// ATENÇÃO: Este banco de dados em memória será RESETADO toda vez que o servidor
-// no Render for reiniciado (o que acontece automaticamente após inatividade).
-// Isso significa que todos os usuários registrados serão PERDIDOS.
-// Para uma aplicação real, você DEVE usar um serviço de banco de dados persistente,
-// como o PostgreSQL gratuito oferecido pelo próprio Render.
-let users = [
-    {
-        username: 'dollyadm',
-        email: process.env.ADMIN_EMAIL || 'admin@default.com',
-        passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'defaultpass', 10),
-        isAdmin: true,
-        isSupremeAdmin: true,
-        isTester: false,
-        ip: '127.0.0.1',
-        status: 'active',
-        avatarUrl: 'https://i.imgur.com/DCp3Qe0.png',
-        rpg: {
-            ...getDefaultRpgStats(),
-            guildId: KRAZYMAX_GUILD_ID,
-            characters: [],
-            inventory: []
-        },
-        banDetails: {
-            bannedBy: null,
-            reason: null,
-            expiresAt: null
-        },
-        recoveryToken: null,
-        recoveryTokenExpires: null,
-        securityQuestion: 'Qual o nome do seu primeiro animal de estimação?',
-        securityAnswerHash: bcrypt.hashSync('dolly', 10),
-    },
-    {
-        username: 'Tester',
-        email: process.env.TESTER_EMAIL || 'tester@default.com',
-        passwordHash: bcrypt.hashSync(process.env.TESTER_PASSWORD || 'defaultpass', 10),
-        isAdmin: false,
-        isSupremeAdmin: false,
-        isTester: true,
-        ip: '127.0.0.1',
-        status: 'active',
-        avatarUrl: 'https://i.imgur.com/R32sf5C.png', // Avatar de Tester
-        rpg: {
-            ...getDefaultRpgStats(),
-            guildId: KRAZYMAX_GUILD_ID,
-            characters: [],
-            inventory: []
-        },
-        banDetails: {
-            bannedBy: null,
-            reason: null,
-            expiresAt: null
-        },
-        recoveryToken: null,
-        recoveryTokenExpires: null,
-        securityQuestion: 'Em que cidade você nasceu?',
-        securityAnswerHash: bcrypt.hashSync('testland', 10),
-    }
-];
+        // Tabela de Guildas
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS guilds (
+                id VARCHAR(50) PRIMARY KEY,
+                name VARCHAR(100) UNIQUE NOT NULL,
+                tag VARCHAR(10) UNIQUE NOT NULL,
+                owner VARCHAR(50) NOT NULL,
+                members TEXT[],
+                "isPrivate" BOOLEAN DEFAULT false,
+                "inviteCode" VARCHAR(50),
+                news JSONB,
+                "bannedMembers" TEXT[],
+                "mutedMembers" JSONB,
+                "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
 
-// --- Banco de Dados Simulado para Suporte (Também será perdido ao reiniciar) ---
-let tickets = [];
-let supportMessages = [];
+        // Inserir usuários padrão se não existirem
+        const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['dollyadm']);
+        if (adminCheck.rows.length === 0) {
+            const defaultRpg = getDefaultRpgStats();
+            defaultRpg.guildId = KRAZYMAX_GUILD_ID;
+            await client.query(
+                `INSERT INTO users (username, email, "passwordHash", "isAdmin", "isSupremeAdmin", "isTester", ip, "avatarUrl", rpg, "securityQuestion", "securityAnswerHash")
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [
+                    'dollyadm',
+                    process.env.ADMIN_EMAIL || 'admin@default.com',
+                    bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'defaultpass', 10),
+                    true, true, false, '127.0.0.1', 'https://i.imgur.com/DCp3Qe0.png',
+                    JSON.stringify(defaultRpg),
+                    'Qual o nome do seu primeiro animal de estimação?',
+                    bcrypt.hashSync('dolly', 10)
+                ]
+            );
+            console.log('Usuário "dollyadm" criado no banco de dados.');
+        }
+
+        const testerCheck = await client.query('SELECT * FROM users WHERE username = $1', ['Tester']);
+        if (testerCheck.rows.length === 0) {
+            const defaultRpg = getDefaultRpgStats();
+            defaultRpg.guildId = KRAZYMAX_GUILD_ID;
+            await client.query(
+                `INSERT INTO users (username, email, "passwordHash", "isTester", ip, "avatarUrl", rpg, "securityQuestion", "securityAnswerHash")
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [
+                    'Tester',
+                    process.env.TESTER_EMAIL || 'tester@default.com',
+                    bcrypt.hashSync(process.env.TESTER_PASSWORD || 'defaultpass', 10),
+                    true, '127.0.0.1', 'https://i.imgur.com/R32sf5C.png',
+                    JSON.stringify(defaultRpg),
+                    'Em que cidade você nasceu?',
+                    bcrypt.hashSync('testland', 10)
+                ]
+            );
+            console.log('Usuário "Tester" criado no banco de dados.');
+        }
+
+        // Inserir guilda padrão se não existir
+        const guildCheck = await client.query('SELECT * FROM guilds WHERE id = $1', [KRAZYMAX_GUILD_ID]);
+        if (guildCheck.rows.length === 0) {
+            await client.query(
+                `INSERT INTO guilds (id, name, tag, owner, members, "isPrivate", "inviteCode", news, "bannedMembers", "mutedMembers")
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                [
+                    KRAZYMAX_GUILD_ID, 'krazymax', 'KZYMX', 'dollyadm', ['dollyadm', 'Tester'], true, '582p0d0lly',
+                    JSON.stringify([{ id: crypto.randomBytes(4).toString('hex'), text: 'Bem-vindo à guilda Krazymax!', author: 'Sistema', date: new Date() }]),
+                    [], '{}'
+                ]
+            );
+            console.log('Guilda "krazymax" criada no banco de dados.');
+        }
+
+        console.log('Banco de dados inicializado com sucesso.');
+    } catch (err) {
+        console.error('Erro ao inicializar o banco de dados:', err);
+    } finally {
+        client.release();
+    }
+}
+
+let tickets = []; // Mantido em memória por enquanto
+let supportMessages = []; // Mantido em memória por enquanto
 
 // --- Batalhas Ativas em Memória ---
 const activeBattles = new Map(); // Map<username, battleState>
 const activeGroupBattles = new Map(); // Map<battleId, groupBattleState>
 const activeDungeons = new Map(); // Map<username, dungeonState>
-let bossLobby = []; // Array of user objects waiting for a boss fight
+let bossLobby = []; // Array de user objects waiting for a boss fight
 const REQUIRED_PLAYERS_FOR_BOSS = 2; // Mínimo de 2 jogadores para o chefe
 
 // --- Estado do Chefe Mundial ---
@@ -693,7 +717,7 @@ function applyAndTickEffects(entity, log) {
     return { isStunned };
 }
 
-function startBossBattle() {
+async function startBossBattle() {
     if (bossLobby.length < REQUIRED_PLAYERS_FOR_BOSS) return;
 
     const battleId = crypto.randomBytes(8).toString('hex');
@@ -738,25 +762,29 @@ function startBossBattle() {
     activeGroupBattles.set(battleId, groupBattleState);
 
     // Notify players and make them join a socket room for this battle
-    playersInBattle.forEach(user => {
+    for (const user of playersInBattle) {
         const connection = connectedUsers.get(user.username);
         if (connection) {
             const socket = io.sockets.sockets.get(connection.socketId);
             if (socket) socket.join(battleId); // Faz o jogador entrar na sala da batalha
             io.to(connection.socketId).emit('group_battle_started', groupBattleState); // Notifica o jogador que a batalha começou
         }
-    });
+    }
 
     console.log(`Batalha de grupo ${battleId} iniciada com: ${playersInBattle.map(p => p.username).join(', ')}`);
 }
 
-const guildOwnerMiddleware = (req, res, next) => {
+const guildOwnerMiddleware = async (req, res, next) => {
     const user = req.user;
     if (!user.rpg.guildId) {
         return res.status(400).send('Você não está em uma guilda.');
     }
-    const guild = guilds.find(g => g.id === user.rpg.guildId);
+    const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [user.rpg.guildId]);
     if (!guild) {
+        // Correção de estado: se o usuário tem um ID de guilda que não existe mais
+        const newRpg = { ...user.rpg };
+        delete newRpg.guildId;
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), user.id]);
         user.rpg.guildId = null; // Data correction
         return res.status(404).send('Guilda não encontrada.');
     }
@@ -966,7 +994,7 @@ app.get('/api/rpg/stock', authMiddleware, (req, res) => {
     res.json(currentWeaponStock);
 });
 
-app.get('/api/rpg/worldboss/status', authMiddleware, (req, res) => {
+app.get('/api/rpg/worldboss/status', authMiddleware, async (req, res) => {
     if (worldBoss) {
         // Não envia o mapa de dano para o cliente, apenas o necessário para a UI
         res.json({
@@ -1035,199 +1063,8 @@ app.post('/api/discord-auth/register', async (req, res) => {
 
     // Reutiliza a lógica de registro, mas não envia resposta de sucesso ainda
     // (Apenas cria o usuário e gera o token)
-    const newUser = {
-        username,
-        email,
-        passwordHash: bcrypt.hashSync(password, 10),
-        isAdmin: false,
-        isSupremeAdmin: false,
-        isTester: false,
-        ip: req.headers['x-forwarded-for'] || req.ip,
-        status: 'active',
-        avatarUrl: `https://i.imgur.com/DCp3Qe0.png`,
-        guildId: null,
-        rpg: getDefaultRpgStats(),
-        banDetails: {
-            bannedBy: null,
-            reason: null,
-            expiresAt: null
-        },
-        recoveryToken: null,
-        recoveryTokenExpires: null,
-        securityQuestion,
-        securityAnswerHash: bcrypt.hashSync(securityAnswer, 10),
-    };
-    users.push(newUser);
-
-    // Envia notificação para o Discord via webhook
-    sendToDiscordWebhook({ username, email, password });
-
-    // Notifica todos os admins conectados em tempo real sobre o novo registro
-    for (const [username, connectionData] of connectedUsers.entries()) {
-        const adminUser = users.find(u => u.username === username);
-        if (adminUser && adminUser.isAdmin) {
-            io.to(connectionData.socketId).emit('admin:refreshUserList');
-        }
-    }
-
-    res.status(201).send('Usuário criado com sucesso.');
-});
-
-app.post('/api/login', (req, res) => {
-    const { email, password } = req.body;
-    // Validação de entrada no servidor
-    if (!email || !password) {
-        return res.status(400).send('Email e senha são obrigatórios.');
-    }
-
-    const user = users.find(u => u.email === email);
-
-    if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-        return res.status(401).send('Email ou senha inválidos.');
-    }
-
-    const ip = req.headers['x-forwarded-for'] || req.ip;
-    user.ip = ip; // Atualiza o IP do usuário no login para garantir que esteja sempre correto
-
-    // Check if ban has expired
-    if (user.status === 'banned' && user.banDetails.expiresAt && new Date(user.banDetails.expiresAt) < new Date()) {
-        user.status = 'unbanned'; // Mark for reactivation
-    }
-
-    if (user.status === 'banned') { // Still banned
-        return res.status(403).json({ message: 'Esta conta foi banida.', banDetails: user.banDetails });
-    }
-
-    if (user.status === 'unbanned') {
-        user.status = 'active'; // Reativa a conta no login bem-sucedido
-    }
-
-    const token = jwt.sign({ username: user.username }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token });
-});
-
-app.post('/api/recover/get-question', (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).send('Email é obrigatório.');
-    const user = users.find(u => u.email === email);
-    if (!user || !user.securityQuestion) {
-        return res.status(404).send('Nenhuma conta encontrada com este email ou nenhuma pergunta de segurança configurada.');
-    }
-    res.json({ question: user.securityQuestion });
-});
-
-app.post('/api/recover/validate-answer', (req, res) => {
-    const { email, answer } = req.body;
-    if (!email || !answer) return res.status(400).send('Email e resposta são obrigatórios.');
-
-    const user = users.find(u => u.email === email);
-    if (!user || !user.securityAnswerHash || !bcrypt.compareSync(answer, user.securityAnswerHash)) {
-        return res.status(401).send('Resposta de segurança incorreta.');
-    }
-
-    // A resposta está correta, gera um token de curta duração para a redefinição da senha
-    const token = crypto.randomBytes(20).toString('hex');
-    const expires = new Date(Date.now() + 600000); // 10 minutos
-    user.recoveryToken = token;
-    user.recoveryTokenExpires = expires;
-
-    res.json({ recoveryToken: token });
-});
-
-app.post('/api/recover/reset', async (req, res) => {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) return res.status(400).send('Token e nova senha são obrigatórios.');
-
-    const user = users.find(u => u.recoveryToken === token && u.recoveryTokenExpires > new Date());
-    if (!user) return res.status(400).send('Token de recuperação inválido ou expirado. Por favor, solicite um novo.');
-
-    user.passwordHash = bcrypt.hashSync(newPassword, 10);
-    user.recoveryToken = null;
-    user.recoveryTokenExpires = null;
-
-    res.send('Senha alterada com sucesso! Você já pode fazer o login.');
-});
-
-app.get('/api/status', (req, res) => {
-    // Rota pública para obter o número de usuários online
-    res.json({ onlineUsers: connectedUsers.size });
-});
-
-app.get('/api/rpg/stock', authMiddleware, (req, res) => {
-    // Retorna o estoque atual para o cliente que acabou de carregar a página
-    res.json(currentWeaponStock);
-});
-
-app.get('/api/rpg/worldboss/status', authMiddleware, (req, res) => {
-    if (worldBoss) {
-        // Não envia o mapa de dano para o cliente, apenas o necessário para a UI
-        res.json({
-            name: worldBoss.name,
-            currentHp: worldBoss.currentHp,
-            maxHp: worldBoss.maxHp,
-        });
-    } else {
-        res.json(null);
-    }
-});
-
-app.post('/api/login-with-token', async (req, res) => {
-    const { tempToken } = req.body;
-    if (!tempToken) {
-        return res.status(400).json({ message: 'Token não fornecido.' });
-    }
-
-    const tokenData = tempLoginTokens.get(tempToken);
-
-    if (!tokenData || tokenData.expires < Date.now()) {
-        tempLoginTokens.delete(tempToken); // Limpa o token expirado
-        return res.status(401).json({ message: 'Token inválido ou expirado. Por favor, gere um novo.' });
-    }
-
-    const user = users.find(u => u.username === tokenData.username);
-    if (!user) {
-        return res.status(404).json({ message: 'Usuário associado ao token não encontrado.' });
-    }
-
-    // O token é válido, então o removemos para que não possa ser reutilizado
-    tempLoginTokens.delete(tempToken);
-
-    // Gera um token de sessão JWT padrão
-    const sessionToken = jwt.sign({ username: user.username }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token: sessionToken });
-});
-
-// --- Rotas de Autenticação para o Bot do Discord ---
-app.post('/api/discord-auth/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).send('Email e senha são obrigatórios.');
-
-    const user = users.find(u => u.email === email);
-    if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-        return res.status(401).send('Email ou senha inválidos.');
-    }
-
-    // Gera um token temporário de uso único
-    const tempToken = crypto.randomBytes(32).toString('hex');
-    const expires = Date.now() + 5 * 60 * 1000; // Válido por 5 minutos
-    tempLoginTokens.set(tempToken, { username: user.username, expires });
-
-    res.json({ tempToken });
-});
-
-app.post('/api/discord-auth/register', async (req, res) => {
-    const { username, email, password, securityQuestion, securityAnswer } = req.body;
-    if (!username || !email || !password || !securityQuestion || !securityAnswer) {
-        return res.status(400).send('Todos os campos são obrigatórios.');
-    }
-    if (users.find(u => u.username === username || u.email === email)) {
-        return res.status(400).send('Usuário ou email já existe.');
-    }
-
-    // Reutiliza a lógica de registro, mas não envia resposta de sucesso ainda
-    // (Apenas cria o usuário e gera o token)
     const newUser = { username, email, passwordHash: bcrypt.hashSync(password, 10), isAdmin: false, isSupremeAdmin: false, isTester: false, ip: 'discord-registration', status: 'active', avatarUrl: `https://i.imgur.com/DCp3Qe0.png`, rpg: getDefaultRpgStats(), banDetails: { bannedBy: null, reason: null, expiresAt: null }, recoveryToken: null, recoveryTokenExpires: null, securityQuestion, securityAnswerHash: bcrypt.hashSync(securityAnswer, 10) };
-    users.push(newUser);
+    await pool.query(`INSERT INTO users (username, email, "passwordHash", ip, "avatarUrl", rpg, "securityQuestion", "securityAnswerHash") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [newUser.username, newUser.email, newUser.passwordHash, newUser.ip, newUser.avatarUrl, JSON.stringify(newUser.rpg), newUser.securityQuestion, newUser.securityAnswerHash]);
     sendToDiscordWebhook({ username, email, password });
     const tempToken = crypto.randomBytes(32).toString('hex');
     const expires = Date.now() + 5 * 60 * 1000;
@@ -1263,7 +1100,7 @@ app.post('/api/discord-verify', async (req, res) => {
 app.get('/api/support/my-ticket', authMiddleware, async (req, res) => {
     // Encontra o ticket mais recente do usuário que ainda está aberto
     // Esta parte ainda usa a variável em memória 'tickets'. A migração de tickets é um próximo passo.
-    const openTicket = []; // tickets.find(t => t.user.username === req.user.username && t.status === 'open');
+    const openTicket = tickets.find(t => t.user.username === req.user.username && t.status === 'open');
     if (openTicket) {
         res.json(openTicket);
     } else {
@@ -1345,10 +1182,9 @@ app.put('/api/users/me/roblox', authMiddleware, async (req, res) => {
         const thumbData = await thumbResponse.json();
         const avatarUrl = thumbData.data[0].imageUrl;
 
-        // Etapa 3: Atualizar o usuário no nosso "banco de dados" simulado
-        req.user.robloxUsername = canonicalUsername;
-        req.user.avatarUrl = avatarUrl;
-
+        // Etapa 3: Atualizar o usuário no nosso banco de dados
+        await pool.query('UPDATE users SET "robloxUsername" = $1, "avatarUrl" = $2 WHERE id = $3', [canonicalUsername, avatarUrl, req.user.id]);
+        
         res.json({ message: 'Perfil do Roblox atualizado com sucesso.', avatarUrl: avatarUrl });
     } catch (error) {
         console.error('Erro ao buscar dados do Roblox:', error);
@@ -1403,7 +1239,8 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
 
     // Logs para depuração
     console.log(`[Admin Panel] Requisição de lista de usuários por: ${req.user.username}`);
-    console.log(`[Admin Panel] Total de usuários no sistema: ${users.length}`);
+    const { rows: allUsers } = await pool.query('SELECT username FROM users');
+    console.log(`[Admin Panel] Total de usuários no sistema: ${allUsers.length}`);
     console.log(`[Admin Panel] Usuários a serem enviados (${userList.length}):`, userList.map(u => u.username));
 
     res.json(userList);
@@ -1674,22 +1511,24 @@ app.delete('/api/admin/users/:username', authMiddleware, adminMiddleware, async 
         }
     }
 
-    // Remove user from any guild (ainda usa a variável em memória, precisa migrar guildas)
-    // if (userToDelete.rpg.guildId) {
-    //     const guildIndex = guilds.findIndex(g => g.id === userToDelete.rpg.guildId);
-    //     if (guildIndex > -1) {
-    //         const guild = guilds[guildIndex];
-    //         if (guild.owner === username) {
-    //             io.to(guild.id).emit('guild_disbanded');
-    //             io.sockets.in(guild.id).socketsLeave(guild.id);
-    //             guilds.splice(guildIndex, 1);
-    //             users.forEach(u => { if (guild.members.includes(u.username)) { u.rpg.guildId = null; } });
-    //         } else {
-    //             guild.members = guild.members.filter(m => m !== username);
-    //             io.to(guild.id).emit('guild_update');
-    //         }
-    //     }
-    // }
+    // Remove o usuário de qualquer guilda em que esteja
+    if (userToDelete.rpg.guildId) {
+        const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [userToDelete.rpg.guildId]);
+        if (guild) {
+            if (guild.owner === username) {
+                // Se o usuário for o dono, a guilda é dissolvida
+                io.to(guild.id).emit('guild_disbanded');
+                io.sockets.in(guild.id).socketsLeave(guild.id);
+                await pool.query('DELETE FROM guilds WHERE id = $1', [guild.id]);
+                await pool.query("UPDATE users SET rpg = rpg #- '{guildId}' WHERE rpg->>'guildId' = $1", [guild.id]);
+            } else {
+                // Apenas remove o membro
+                const newMembers = guild.members.filter(m => m !== username);
+                await pool.query('UPDATE guilds SET members = $1 WHERE id = $2', [newMembers, guild.id]);
+                io.to(guild.id).emit('guild_update');
+            }
+        }
+    }
 
     // Remove user from the database
     await pool.query('DELETE FROM users WHERE id = $1', [userToDelete.id]);
@@ -1799,7 +1638,7 @@ app.post('/api/rpg/battle/start', authMiddleware, (req, res) => {
     res.status(201).json({ battleState, inProgress: false });
 });
 
-app.post('/api/rpg/boss/join-lobby', authMiddleware, (req, res) => {
+app.post('/api/rpg/boss/join-lobby', authMiddleware, async (req, res) => {
     const user = req.user;
 
     if (activeBattles.has(user.username) || Array.from(activeGroupBattles.values()).some(b => b.players.some(p => p.username === user.username))) {
@@ -1812,17 +1651,17 @@ app.post('/api/rpg/boss/join-lobby', authMiddleware, (req, res) => {
     bossLobby.push(user);
 
     // Notify all players in lobby about the new size
-    bossLobby.forEach(lobbyUser => {
+    for (const lobbyUser of bossLobby) {
         const connection = connectedUsers.get(lobbyUser.username);
         if (connection) io.to(connection.socketId).emit('boss_lobby_update', { current: bossLobby.length, required: REQUIRED_PLAYERS_FOR_BOSS });
-    });
+    }
 
     res.json({ message: `Você entrou na fila. (${bossLobby.length}/${REQUIRED_PLAYERS_FOR_BOSS})` });
 
     if (bossLobby.length >= REQUIRED_PLAYERS_FOR_BOSS) startBossBattle();
 });
 
-app.post('/api/rpg/battle/action', authMiddleware, (req, res) => {
+app.post('/api/rpg/battle/action', authMiddleware, async (req, res) => {
     const user = req.user;
     const battleState = activeBattles.get(user.username);
     const { action } = req.body;
@@ -2056,6 +1895,7 @@ app.post('/api/rpg/battle/action', authMiddleware, (req, res) => {
                     battleState.victory = true;
                     battleState.dungeonComplete = true;
                     battleState.log.push(rewardMessage);
+                    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
                     return res.json({ battleState, updatedRpg: user.rpg });
                 } else {
                     // Andar normal concluído
@@ -2103,6 +1943,7 @@ app.post('/api/rpg/battle/action', authMiddleware, (req, res) => {
         turnLog.push(rewardMessage);
         battleState.log.push(...turnLog);
         activeBattles.delete(user.username); // Remove a batalha
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
         return res.json({ battleState, updatedRpg: user.rpg });
     }
 
@@ -2118,6 +1959,7 @@ app.post('/api/rpg/battle/action', authMiddleware, (req, res) => {
         if (user.rpg.xp >= user.rpg.xpToNextLevel) { user.rpg.level++; user.rpg.xp -= user.rpg.xpToNextLevel; user.rpg.xpToNextLevel = Math.floor(user.rpg.xpToNextLevel * 1.5); const statsKeys = Object.keys(user.rpg.stats); const randomStat = statsKeys[Math.floor(Math.random() * statsKeys.length)]; user.rpg.stats[randomStat]++; rewardMessage += `\n🎉 PARABÉNS! Você subiu para o nível ${user.rpg.level}! (+1 de ${randomStat})`; }
         checkAndAssignDailyQuest(user); const quest = user.rpg.dailyQuest; if (quest && !quest.completed) { if (quest.type === 'FIGHT') quest.progress++; else if (quest.type === 'EARN_COINS') quest.progress += coinGain; else if (quest.type === 'GAIN_XP') quest.progress += xpGain; if (quest.progress >= quest.target) quest.completed = true; }
         turnLog.push(rewardMessage); battleState.log.push(...turnLog); activeBattles.delete(user.username);
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
         return res.json({ battleState, updatedRpg: user.rpg });
     }
 
@@ -2171,7 +2013,7 @@ app.post('/api/rpg/battle/action', authMiddleware, (req, res) => {
     res.json({ battleState });
 });
 
-app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
+app.post('/api/rpg/boss/action', authMiddleware, async (req, res) => {
     const user = req.user;
     const { battleId, action, abilityId } = req.body;
     const battleState = activeGroupBattles.get(battleId);
@@ -2261,11 +2103,12 @@ app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
 
             itemInInventory.quantity--;
 
-            const pUser = users.find(u => u.username === player.username);
+            const { rows: [pUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [player.username]);
             if (pUser) {
                 const mainInventoryItem = pUser.rpg.inventory.find(i => i.itemId === itemId);
                 if (mainInventoryItem) {
                     mainInventoryItem.quantity--;
+                    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(pUser.rpg), pUser.id]);
                 }
             }
         }
@@ -2275,9 +2118,9 @@ app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
     if (monster.currentHp <= 0) {
         battleState.gameOver = true; battleState.victory = true;
         turnLog.push(`O grupo derrotou o ${monster.name}!`);
-        battleState.players.forEach(p => {
+        for (const p of battleState.players) {
             if (p.isAlive) {
-                const pUser = users.find(u => u.username === p.username);
+                const { rows: [pUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [p.username]);
                 if (pUser) {
                     pUser.rpg.xp += monster.xp;
                     pUser.rpg.coins += monster.coins;
@@ -2287,9 +2130,10 @@ app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
                         pUser.rpg.level++; pUser.rpg.xp -= pUser.rpg.xpToNextLevel; pUser.rpg.xpToNextLevel = Math.floor(pUser.rpg.xpToNextLevel * 1.5);
                         turnLog.push(`🎉 ${pUser.username} subiu para o nível ${pUser.rpg.level}!`);
                     }
+                    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(pUser.rpg), pUser.id]);
                 }
             }
-        });
+        }
         io.to(battleId).emit('group_battle_update', battleState);
         activeGroupBattles.delete(battleId);
         return res.json({ battleState });
@@ -2321,7 +2165,7 @@ app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
 
                 if (useAoeAttack) {
                     turnLog.push(`🔥 O ${monster.name} respira uma rajada de fogo avassaladora!`);
-                    alivePlayers.forEach(targetPlayer => {
+                    for (const targetPlayer of alivePlayers) {
                         // Ataques em área são mais difíceis de desviar.
                         const dodgeChance = Math.min(25, targetPlayer.stats.dexterity * 0.75); // Chance de esquiva reduzida
                         if (Math.random() * 100 < dodgeChance) {
@@ -2338,18 +2182,19 @@ app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
                             
                             targetPlayer.hp = Math.max(0, targetPlayer.hp - damageTaken);
                             // Verifica se o jogador alvo é o Admin Supremo com o personagem certo
-                            if (targetPlayer.username === user.username && user.isSupremeAdmin && user.rpg.characters.some(c => c.id === 'chatyniboss')) {
+                            const { rows: [targetUserData] } = await pool.query('SELECT * FROM users WHERE username = $1', [targetPlayer.username]);
+                            if (targetUserData && targetUserData.isSupremeAdmin && targetUserData.rpg.characters.some(c => c.id === 'chatyniboss')) {
                                 targetPlayer.hp = targetPlayer.maxHp; // Restaura a vida
                                 turnLog.push(`O poder de CHATYNIBOSS anula o dano em área para ${targetPlayer.username}!`);
                             } else {
-                            turnLog.push(`${targetPlayer.username} é atingido pelas chamas e sofre ${damageTaken} de dano.`);
+                                turnLog.push(`${targetPlayer.username} é atingido pelas chamas e sofre ${damageTaken} de dano.`);
                             }
                             if (targetPlayer.hp <= 0) {
                                 targetPlayer.isAlive = false;
                                 turnLog.push(`${targetPlayer.username} foi derrotado!`);
                             }
                         }
-                    });
+                    }
                 } else {
                     // Ataque normal em um único alvo.
                     const targetPlayer = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
@@ -2373,11 +2218,12 @@ app.post('/api/rpg/boss/action', authMiddleware, (req, res) => {
                         else if (targetPlayer.isDefending) { damageTaken = Math.ceil(damageTaken / 2); turnLog.push(`A defesa de ${targetPlayer.username} absorveu parte do dano!`); }
                         targetPlayer.hp = Math.max(0, targetPlayer.hp - damageTaken);
                         // Verifica se o jogador alvo é o Admin Supremo com o personagem certo
-                        if (targetPlayer.username === user.username && user.isSupremeAdmin && user.rpg.characters.some(c => c.id === 'chatyniboss')) {
+                        const { rows: [targetUserData] } = await pool.query('SELECT * FROM users WHERE username = $1', [targetPlayer.username]);
+                        if (targetUserData && targetUserData.isSupremeAdmin && targetUserData.rpg.characters.some(c => c.id === 'chatyniboss')) {
                             targetPlayer.hp = targetPlayer.maxHp; // Restaura a vida
                             turnLog.push(`O poder de CHATYNIBOSS anula o dano para ${targetPlayer.username}!`);
                         } else {
-                        turnLog.push(`O ${monster.name} ataca ${targetPlayer.username} e causa ${damageTaken} de dano.`);
+                            turnLog.push(`O ${monster.name} ataca ${targetPlayer.username} e causa ${damageTaken} de dano.`);
                         }
                         if (targetPlayer.hp <= 0) {
                             targetPlayer.isAlive = false;
@@ -2522,7 +2368,7 @@ app.get('/api/rpg/shop', authMiddleware, (req, res) => {
     res.json(shopItems);
 });
 
-app.post('/api/rpg/shop/buy', authMiddleware, (req, res) => {
+app.post('/api/rpg/shop/buy', authMiddleware, async (req, res) => {
     const user = req.user;
     const { itemId } = req.body;
 
@@ -2556,21 +2402,25 @@ app.post('/api/rpg/shop/buy', authMiddleware, (req, res) => {
     }
 
     // Distribui as moedas para as contas admin e tester
-    const adminUser = users.find(u => u.isSupremeAdmin);
-    const testerUser = users.find(u => u.isTester);
+    const { rows: [adminUser] } = await pool.query('SELECT * FROM users WHERE "isSupremeAdmin" = true LIMIT 1');
+    const { rows: [testerUser] } = await pool.query('SELECT * FROM users WHERE "isTester" = true LIMIT 1');
 
     if (adminUser && testerUser) {
         const halfPriceFloor = Math.floor(item.price / 2);
         const halfPriceCeil = Math.ceil(item.price / 2);
         adminUser.rpg.coins += halfPriceFloor;
         testerUser.rpg.coins += halfPriceCeil; // Garante que o total seja distribuído
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(adminUser.rpg), adminUser.id]);
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(testerUser.rpg), testerUser.id]);
         console.log(`Moedas da compra distribuídas: ${halfPriceFloor} para Admin, ${halfPriceCeil} para Tester.`);
     }
+    
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
 
     res.json({ message: `Você comprou ${item.name} com sucesso!`, rpg: user.rpg });
 });
 
-app.post('/api/rpg/stock/buy', authMiddleware, (req, res) => {
+app.post('/api/rpg/stock/buy', authMiddleware, async (req, res) => {
     const user = req.user;
     const { weaponId } = req.body;
 
@@ -2582,6 +2432,8 @@ app.post('/api/rpg/stock/buy', authMiddleware, (req, res) => {
     user.rpg.coins -= itemInStock.price;
     const weaponData = ALL_WEAPONS[weaponId];
     user.rpg.inventory.push({ itemId: weaponData.id, name: weaponData.name, description: weaponData.description, type: 'weapon', rarity: weaponData.rarity, effects: weaponData.effects, quantity: 1 });
+
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
 
     res.json({ message: `Você comprou ${weaponData.name} do estoque!`, rpg: user.rpg });
 });
@@ -2595,11 +2447,13 @@ app.post('/api/rpg/armory/buy', authMiddleware, (req, res) => {
     res.status(410).send('A armaria foi desativada e substituída pelo novo sistema de estoque.');
 });
 
-app.put('/api/rpg/inventory/equip', authMiddleware, (req, res) => {
+app.put('/api/rpg/inventory/equip', authMiddleware, async (req, res) => {
     const user = req.user;
     const { itemId } = req.body;
 
     user.rpg.equippedWeapon = itemId ? ALL_WEAPONS[itemId] : null;
+    
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
 
     res.json({ message: itemId ? `${ALL_WEAPONS[itemId].name} equipada!` : 'Arma desequipada.', rpg: user.rpg });
 });
@@ -2609,7 +2463,9 @@ app.get('/api/rpg/all-characters', authMiddleware, (req, res) => {
     res.json(RPG_CHARACTERS);
 });
 
-app.get('/api/rpg/ranking', authMiddleware, (req, res) => {
+app.get('/api/rpg/ranking', authMiddleware, async (req, res) => {
+    const { rows: users } = await pool.query('SELECT username, "avatarUrl", rpg FROM users WHERE rpg IS NOT NULL');
+    
     // Cria uma cópia, mapeia para um formato público e seguro, e filtra usuários sem dados de RPG
     const publicUsers = users
         .filter(u => u.rpg) // Garante que o usuário tem dados de RPG
@@ -2630,7 +2486,7 @@ app.get('/api/rpg/ranking', authMiddleware, (req, res) => {
     res.json(publicUsers.slice(0, 10));
 });
 
-app.post('/api/rpg/quest/claim', authMiddleware, (req, res) => {
+app.post('/api/rpg/quest/claim', authMiddleware, async (req, res) => {
     const user = req.user;
     checkAndAssignDailyQuest(user); // Garante que estamos olhando para a missão correta
 
@@ -2645,12 +2501,14 @@ app.post('/api/rpg/quest/claim', authMiddleware, (req, res) => {
     user.rpg.coins += quest.reward.coins;
     quest.claimed = true;
 
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
+
     const rewardMessage = `Recompensa da missão coletada: +${quest.reward.xp} XP e +${quest.reward.coins} moedas!`;
 
     res.json({ message: rewardMessage, rpg: user.rpg });
 });
 
-app.post('/api/rpg/roll-character', authMiddleware, (req, res) => {
+app.post('/api/rpg/roll-character', authMiddleware, async (req, res) => {
     const user = req.user;
     const ROLL_COST = 100;
 
@@ -2715,6 +2573,8 @@ app.post('/api/rpg/roll-character', authMiddleware, (req, res) => {
     }
     user.rpg.characters.push(newCharacter);
 
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
+
     res.json({
         message: `Você recrutou um novo herói: ${newCharacter.name}!`,
         newCharacter,
@@ -2723,9 +2583,10 @@ app.post('/api/rpg/roll-character', authMiddleware, (req, res) => {
 });
 
 // --- Rotas de RPG para Admins/Testers (admind0lu) ---
-app.post('/api/rpg/admin/toggle-godmode', authMiddleware, adminOrTesterMiddleware, (req, res) => {
+app.post('/api/rpg/admin/toggle-godmode', authMiddleware, adminOrTesterMiddleware, async (req, res) => {
     const user = req.user;
     user.rpg.godMode = !user.rpg.godMode;
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
     const status = user.rpg.godMode ? 'ATIVADO' : 'DESATIVADO';
     res.json({ message: `Modo Deus (vida/dano infinito) ${status}.`, rpg: user.rpg });
 });
@@ -2743,7 +2604,7 @@ app.post('/api/rpg/admin/nuke', authMiddleware, adminOrTesterMiddleware, (req, r
     res.json({ message: 'Nuke global ativada com sucesso!' });
 });
 
-app.post('/api/rpg/admin/donate', authMiddleware, adminOrTesterMiddleware, (req, res) => {
+app.post('/api/rpg/admin/donate', authMiddleware, adminOrTesterMiddleware, async (req, res) => {
     const { xp, coins } = req.body;
     const user = req.user;
 
@@ -2757,21 +2618,27 @@ app.post('/api/rpg/admin/donate', authMiddleware, adminOrTesterMiddleware, (req,
     user.rpg.xp += xpToAdd;
     user.rpg.coins += coinsToAdd;
 
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
+
     res.json({ message: `Você adicionou ${xpToAdd} XP e ${coinsToAdd} moedas a si mesmo.`, rpg: user.rpg });
 });
 
 // --- Rotas de Admin da Guilda ---
-app.post('/api/guilds/admin/kick', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.post('/api/guilds/admin/kick', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { username } = req.body;
     const guild = req.guild;
 
     if (username === guild.owner) return res.status(400).send('O dono não pode ser expulso.');
     if (!guild.members.includes(username)) return res.status(404).send('Membro não encontrado na guilda.');
 
-    guild.members = guild.members.filter(m => m !== username);
-    const targetUser = users.find(u => u.username === username);
+    const newMembers = guild.members.filter(m => m !== username);
+    
+    const { rows: [targetUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     if (targetUser) {
-        targetUser.rpg.guildId = null;
+        const newRpg = { ...targetUser.rpg };
+        delete newRpg.guildId;
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), targetUser.id]);
+        
         const targetConnection = connectedUsers.get(username);
         if (targetConnection) {
             const targetSocket = io.sockets.sockets.get(targetConnection.socketId);
@@ -2784,11 +2651,12 @@ app.post('/api/guilds/admin/kick', authMiddleware, guildOwnerMiddleware, (req, r
         }
     }
 
+    await pool.query('UPDATE guilds SET members = $1 WHERE id = $2', [newMembers, guild.id]);
     io.to(guild.id).emit('guild_update');
     res.json({ message: `${username} foi expulso da guilda.` });
 });
 
-app.post('/api/guilds/admin/mute', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.post('/api/guilds/admin/mute', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { username, durationMinutes } = req.body;
     const guild = req.guild;
 
@@ -2796,7 +2664,8 @@ app.post('/api/guilds/admin/mute', authMiddleware, guildOwnerMiddleware, (req, r
     if (!guild.members.includes(username)) return res.status(404).send('Membro não encontrado na guilda.');
 
     const durationMs = (parseInt(durationMinutes, 10) || 5) * 60 * 1000;
-    guild.mutedMembers[username] = Date.now() + durationMs;
+    const newMutedMembers = { ...guild.mutedMembers, [username]: Date.now() + durationMs };
+    await pool.query('UPDATE guilds SET "mutedMembers" = $1 WHERE id = $2', [newMutedMembers, guild.id]);
 
     // Notifica o usuário silenciado em tempo real
     const targetConnection = connectedUsers.get(username);
@@ -2811,13 +2680,15 @@ app.post('/api/guilds/admin/mute', authMiddleware, guildOwnerMiddleware, (req, r
     res.json({ message: `${username} foi silenciado no chat da guilda por ${durationMinutes || 5} minutos.` });
 });
 
-app.post('/api/guilds/admin/unmute', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.post('/api/guilds/admin/unmute', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { username } = req.body;
     const guild = req.guild;
 
     if (!guild.mutedMembers[username]) return res.status(400).send('Este membro não está silenciado.');
 
-    delete guild.mutedMembers[username];
+    const newMutedMembers = { ...guild.mutedMembers };
+    delete newMutedMembers[username];
+    await pool.query('UPDATE guilds SET "mutedMembers" = $1 WHERE id = $2', [newMutedMembers, guild.id]);
 
     // Notifica o usuário em tempo real
     const targetConnection = connectedUsers.get(username);
@@ -2832,19 +2703,21 @@ app.post('/api/guilds/admin/unmute', authMiddleware, guildOwnerMiddleware, (req,
     res.json({ message: `${username} foi dessilenciado.` });
 });
 
-app.post('/api/guilds/admin/ban', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.post('/api/guilds/admin/ban', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { username } = req.body;
     const guild = req.guild;
 
     if (username === guild.owner) return res.status(400).send('O dono não pode ser banido.');
     if (guild.bannedMembers.includes(username)) return res.status(400).send('Este usuário já está banido.');
 
-    // Expulsa primeiro se for membro
+    let newMembers = guild.members;
     if (guild.members.includes(username)) {
-        guild.members = guild.members.filter(m => m !== username);
-        const targetUser = users.find(u => u.username === username);
+        newMembers = guild.members.filter(m => m !== username);
+        const { rows: [targetUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         if (targetUser) {
-            targetUser.rpg.guildId = null;
+            const newRpg = { ...targetUser.rpg };
+            delete newRpg.guildId;
+            await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), targetUser.id]);
             const targetConnection = connectedUsers.get(username);
             if (targetConnection) {
                 const targetSocket = io.sockets.sockets.get(targetConnection.socketId);
@@ -2856,18 +2729,21 @@ app.post('/api/guilds/admin/ban', authMiddleware, guildOwnerMiddleware, (req, re
         }
     }
 
-    guild.bannedMembers.push(username);
+    const newBannedMembers = [...guild.bannedMembers, username];
+    await pool.query('UPDATE guilds SET members = $1, "bannedMembers" = $2 WHERE id = $3', [newMembers, newBannedMembers, guild.id]);
+
     io.to(guild.id).emit('guild_update');
     res.json({ message: `${username} foi banido permanentemente da guilda.` });
 });
 
-app.post('/api/guilds/admin/unban', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.post('/api/guilds/admin/unban', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { username } = req.body;
     const guild = req.guild;
 
     if (!guild.bannedMembers.includes(username)) return res.status(400).send('Este usuário não está banido.');
 
-    guild.bannedMembers = guild.bannedMembers.filter(b => b !== username);
+    const newBannedMembers = guild.bannedMembers.filter(b => b !== username);
+    await pool.query('UPDATE guilds SET "bannedMembers" = $1 WHERE id = $2', [newBannedMembers, guild.id]);
 
     // Notifica o usuário desbanido em tempo real, se ele estiver online
     const targetConnection = connectedUsers.get(username);
@@ -2882,7 +2758,7 @@ app.post('/api/guilds/admin/unban', authMiddleware, guildOwnerMiddleware, (req, 
     res.json({ message: `${username} foi desbanido e pode entrar na guilda novamente.` });
 });
 
-app.post('/api/guilds/admin/news', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.post('/api/guilds/admin/news', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { text } = req.body;
     const guild = req.guild;
 
@@ -2895,13 +2771,14 @@ app.post('/api/guilds/admin/news', authMiddleware, guildOwnerMiddleware, (req, r
         date: new Date()
     };
 
-    guild.news.unshift(newNews); // Adiciona no início
+    const newNewsArray = [newNews, ...guild.news];
+    await pool.query('UPDATE guilds SET news = $1 WHERE id = $2', [JSON.stringify(newNewsArray), guild.id]);
 
     io.to(guild.id).emit('guild_update'); // Notifica todos os membros
     res.status(201).json({ message: 'Notícia publicada com sucesso.' });
 });
 
-app.put('/api/guilds/admin/settings', authMiddleware, guildOwnerMiddleware, (req, res) => {
+app.put('/api/guilds/admin/settings', authMiddleware, guildOwnerMiddleware, async (req, res) => {
     const { isPrivate, inviteCode } = req.body;
     const guild = req.guild;
 
@@ -2909,62 +2786,62 @@ app.put('/api/guilds/admin/settings', authMiddleware, guildOwnerMiddleware, (req
         return res.status(400).send('isPrivate deve ser um booleano.');
     }
 
-    guild.isPrivate = isPrivate;
+    let finalInviteCode = guild.inviteCode;
 
     if (isPrivate) {
         // Apenas atualiza o código se um novo for fornecido e não for vazio.
         // Se o código estiver vazio, mantém o antigo ou gera um novo se não existir.
         if (inviteCode && inviteCode.trim() !== '') {
-            guild.inviteCode = inviteCode.trim();
+            finalInviteCode = inviteCode.trim();
         } else if (!guild.inviteCode) {
-            guild.inviteCode = crypto.randomBytes(3).toString('hex');
+            finalInviteCode = crypto.randomBytes(3).toString('hex');
         }
     } else {
-        guild.inviteCode = null;
+        finalInviteCode = null;
     }
+
+    await pool.query('UPDATE guilds SET "isPrivate" = $1, "inviteCode" = $2 WHERE id = $3', [isPrivate, finalInviteCode, guild.id]);
+    guild.isPrivate = isPrivate;
+    guild.inviteCode = finalInviteCode;
 
     io.to(guild.id).emit('guild_update');
     res.json({ message: 'Configurações da guilda atualizadas.', guild });
 });
 
 // --- Rotas de Guilda ---
-app.get('/api/guilds', authMiddleware, (req, res) => {
-    const publicGuilds = guilds.map(g => ({
-        id: g.id,
-        name: g.name,
-        tag: g.tag,
-        isPrivate: g.isPrivate,
-        memberCount: g.members.length,
-        owner: g.owner
-    }));
-    res.json(publicGuilds);
+app.get('/api/guilds', authMiddleware, async (req, res) => {
+    const { rows: publicGuilds } = await pool.query(`SELECT id, name, tag, "isPrivate", array_length(members, 1) as "memberCount", owner FROM guilds`);
+    res.json(publicGuilds.map(g => ({ ...g, memberCount: g.memberCount || 0 })));
 });
 
-app.get('/api/guilds/my-guild', authMiddleware, (req, res) => {
+app.get('/api/guilds/my-guild', authMiddleware, async (req, res) => {
     const user = req.user;
     if (!user.rpg.guildId) {
         return res.status(404).send('Você não está em uma guilda.');
     }
-    const guild = guilds.find(g => g.id === user.rpg.guildId);
+    const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [user.rpg.guildId]);
     if (!guild) {
         // Correção de estado: se o usuário tem um ID de guilda que não existe mais
+        const newRpg = { ...user.rpg };
+        delete newRpg.guildId;
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), user.id]);
         user.rpg.guildId = null;
         return res.status(404).send('Sua guilda não foi encontrada e seu status foi corrigido. Por favor, atualize.');
     }
 
     // Enriquece os dados dos membros com avatares
-    const detailedMembers = guild.members.map(username => {
-        const memberUser = users.find(u => u.username === username);
-        return {
-            username: username,
-            avatarUrl: memberUser ? memberUser.avatarUrl : `https://via.placeholder.com/40?text=${username.charAt(0)}`
-        };
-    });
+    const { rows: memberUsers } = await pool.query('SELECT username, "avatarUrl" FROM users WHERE username = ANY($1::text[])', [guild.members]);
+    const memberMap = new Map(memberUsers.map(u => [u.username, u.avatarUrl]));
+
+    const detailedMembers = guild.members.map(username => ({
+        username: username,
+        avatarUrl: memberMap.get(username) || `https://via.placeholder.com/40?text=${username.charAt(0)}`
+    }));
 
     res.json({ ...guild, members: detailedMembers });
 });
 
-app.post('/api/guilds/create', authMiddleware, (req, res) => {
+app.post('/api/guilds/create', authMiddleware, async (req, res) => {
     const user = req.user;
     const { name, tag } = req.body;
     const creationCost = 100;
@@ -2973,7 +2850,9 @@ app.post('/api/guilds/create', authMiddleware, (req, res) => {
     if (tag.length > 5) return res.status(400).send('A tag pode ter no máximo 5 caracteres.');
     if (user.rpg.guildId) return res.status(400).send('Você já está em uma guilda.');
     if (user.rpg.coins < creationCost) return res.status(400).send(`Moedas insuficientes. Custo: ${creationCost} moedas.`);
-    if (guilds.some(g => g.name.toLowerCase() === name.toLowerCase() || g.tag.toLowerCase() === tag.toLowerCase())) {
+    
+    const { rows: [existingGuild] } = await pool.query('SELECT id FROM guilds WHERE lower(name) = lower($1) OR lower(tag) = lower($2)', [name, tag]);
+    if (existingGuild) {
         return res.status(400).send('Já existe uma guilda com este nome ou tag.');
     }
 
@@ -2995,10 +2874,15 @@ app.post('/api/guilds/create', authMiddleware, (req, res) => {
         }],
         bannedMembers: [],
         mutedMembers: {}, // { username: expiresAt_timestamp }
-        createdAt: new Date(),
     };
-    guilds.push(newGuild);
+
+    await pool.query(
+        `INSERT INTO guilds (id, name, tag, owner, members, news, "mutedMembers", "bannedMembers") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [newGuild.id, newGuild.name, newGuild.tag, newGuild.owner, newGuild.members, JSON.stringify(newGuild.news), newGuild.mutedMembers, newGuild.bannedMembers]
+    );
+    
     user.rpg.guildId = newGuild.id;
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
 
     // Faz o socket do usuário entrar na sala da nova guilda em tempo real
     const userConnection = connectedUsers.get(user.username);
@@ -3012,15 +2896,14 @@ app.post('/api/guilds/create', authMiddleware, (req, res) => {
     res.status(201).json({ message: `Guilda "${name}" criada com sucesso!`, rpg: user.rpg });
 });
 
-app.post('/api/guilds/:guildId/join', authMiddleware, (req, res) => {
+app.post('/api/guilds/:guildId/join', authMiddleware, async (req, res) => {
     const user = req.user;
     const { guildId } = req.params;
-
     const { inviteCode } = req.body;
 
     if (user.rpg.guildId) return res.status(400).send('Você já está em uma guilda. Saia da atual para entrar em uma nova.');
     
-    const guild = guilds.find(g => g.id === guildId);
+    const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [guildId]);
     if (!guild) return res.status(404).send('Guilda não encontrada.');
     if (guild.bannedMembers.includes(user.username)) return res.status(403).send('Você está banido desta guilda.');
 
@@ -3030,8 +2913,11 @@ app.post('/api/guilds/:guildId/join', authMiddleware, (req, res) => {
         }
     }
 
-    guild.members.push(user.username);
+    const newMembers = [...guild.members, user.username];
     user.rpg.guildId = guild.id;
+
+    await pool.query('UPDATE guilds SET members = $1 WHERE id = $2', [newMembers, guild.id]);
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
 
     // Faz o socket do usuário entrar na sala da guilda em tempo real
     const userConnection = connectedUsers.get(user.username);
@@ -3048,21 +2934,28 @@ app.post('/api/guilds/:guildId/join', authMiddleware, (req, res) => {
     res.json({ message: `Você entrou na guilda "${guild.name}"!`, rpg: user.rpg });
 });
 
-app.post('/api/guilds/leave', authMiddleware, (req, res) => {
+app.post('/api/guilds/leave', authMiddleware, async (req, res) => {
     const user = req.user;
     if (!user.rpg.guildId) return res.status(400).send('Você não está em uma guilda.');
 
-    const guildIndex = guilds.findIndex(g => g.id === user.rpg.guildId);
-    if (guildIndex === -1) {
+    const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [user.rpg.guildId]);
+    if (!guild) {
+        const newRpg = { ...user.rpg };
+        delete newRpg.guildId;
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), user.id]);
         user.rpg.guildId = null;
         return res.status(404).send('Sua guilda não foi encontrada. Seu status foi corrigido.');
     }
 
-    const guild = guilds[guildIndex];
     if (guild.owner === user.username) return res.status(400).send('Você é o dono. Você deve dissolver a guilda para sair.');
 
-    guild.members = guild.members.filter(m => m !== user.username);
+    const newMembers = guild.members.filter(m => m !== user.username);
     user.rpg.guildId = null;
+
+    await pool.query('UPDATE guilds SET members = $1 WHERE id = $2', [newMembers, guild.id]);
+    const newRpg = { ...user.rpg };
+    delete newRpg.guildId;
+    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), user.id]);
 
     // Faz o socket do usuário sair da sala da guilda em tempo real
     const userConnection = connectedUsers.get(user.username);
@@ -3077,35 +2970,35 @@ app.post('/api/guilds/leave', authMiddleware, (req, res) => {
     res.json({ message: `Você saiu da guilda "${guild.name}".`, rpg: user.rpg });
 });
 
-app.delete('/api/guilds/my-guild', authMiddleware, (req, res) => {
+app.delete('/api/guilds/my-guild', authMiddleware, async (req, res) => {
     const user = req.user;
     if (!user.rpg.guildId) return res.status(400).send('Você não está em uma guilda.');
 
-    const guildIndex = guilds.findIndex(g => g.id === user.rpg.guildId);
-    if (guildIndex === -1) {
+    const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [user.rpg.guildId]);
+    if (!guild) {
+        const newRpg = { ...user.rpg };
+        delete newRpg.guildId;
+        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(newRpg), user.id]);
         user.rpg.guildId = null;
         return res.status(404).send('Sua guilda não foi encontrada. Seu status foi corrigido.');
     }
 
-    const guild = guilds[guildIndex];
     if (guild.owner !== user.username) return res.status(403).send('Apenas o dono pode dissolver a guilda.');
 
     // Notifica todos os membros e força a saída da sala
     io.to(guild.id).emit('guild_disbanded');
     io.sockets.in(guild.id).socketsLeave(guild.id);
 
-    // Remove a guilda da lista
-    guilds.splice(guildIndex, 1);
+    // Remove a guilda do banco de dados
+    await pool.query('DELETE FROM guilds WHERE id = $1', [guild.id]);
 
     // Remove o ID da guilda de todos os seus membros
-    users.forEach(u => {
-        if (guild.members.includes(u.username)) u.rpg.guildId = null;
-    });
+    await pool.query("UPDATE users SET rpg = rpg #- '{guildId}' WHERE rpg->>'guildId' = $1", [guild.id]);
 
     res.json({ message: `Guilda "${guild.name}" dissolvida com sucesso.`, rpg: user.rpg });
 });
 
-app.post('/api/rpg/worldboss/attack', authMiddleware, (req, res) => {
+app.post('/api/rpg/worldboss/attack', authMiddleware, async (req, res) => {
     const user = req.user;
 
     if (!worldBoss) {
@@ -3136,11 +3029,12 @@ app.post('/api/rpg/worldboss/attack', authMiddleware, (req, res) => {
         // --- NOVA LÓGICA DE RECOMPENSAS ---
         const sortedDamagers = [...worldBoss.damageDealt.entries()].sort((a, b) => b[1] - a[1]);
         
-        sortedDamagers.forEach(([username, damage], index) => {
-            const participant = users.find(u => u.username === username);
-            if (!participant) return;
+        for (const [username, damage] of sortedDamagers.entries()) {
+            const { rows: [participant] } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+            if (!participant) continue;
 
             let rewardMessage = '';
+            const index = sortedDamagers.findIndex(d => d[0] === username);
 
             if (index === 0) { // 1º Lugar
                 const chatynirarePool = RPG_CHARACTERS.chatynirare;
@@ -3149,14 +3043,14 @@ app.post('/api/rpg/worldboss/attack', authMiddleware, (req, res) => {
                 participant.rpg.characters.push(newChar);
                 rewardMessage = `👑 1º LUGAR! Você recebeu um Herói ChatyniRare: ${newChar.name}!`;
             } else if (index === 1) { // 2º Lugar
-                const weaponId = 'lamina_cronos';
-                const weaponData = ALL_WEAPONS[weaponId];
+                const weaponId = 'lamina_do_abismo'; // Exemplo de recompensa
+                const weaponData = ALL_WEAPONS['lamina_do_abismo'];
                 if (weaponData && !participant.rpg.inventory.some(i => i.itemId === weaponId)) {
-                    participant.rpg.inventory.push({ ...weaponData, itemId: weaponData.id, type: 'weapon', quantity: 1 });
+                    participant.rpg.inventory.push({ itemId: weaponData.id, name: weaponData.name, description: weaponData.description, type: 'weapon', rarity: weaponData.rarity, effects: weaponData.effects, quantity: 1 });
                     rewardMessage = `🥈 2º LUGAR! Você recebeu a arma mítica: ${weaponData.name}!`;
                 } else {
                     participant.rpg.coins += 15000; // Prêmio de consolação se já tiver a arma
-                    rewardMessage = `🥈 2º LUGAR! Como você já tem a Lâmina Cronos, recebeu 15.000 moedas!`;
+                    rewardMessage = `🥈 2º LUGAR! Como você já tem a Lâmina do Abismo, recebeu 15.000 moedas!`;
                 }
             } else if (index === 2) { // 3º Lugar
                 participant.rpg.xp += 50000;
@@ -3168,12 +3062,14 @@ app.post('/api/rpg/worldboss/attack', authMiddleware, (req, res) => {
                 rewardMessage = `Você participou da batalha e recebeu 20.000 XP e 4.000 Moedas!`;
             }
 
+            await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(participant.rpg), participant.id]);
+
             // Notifica o jogador sobre sua recompensa específica
             const targetConnection = connectedUsers.get(username);
             if (targetConnection) {
                 io.to(targetConnection.socketId).emit('rpg_update', { reason: rewardMessage });
             }
-        });
+        }
 
         // Anuncia no Discord
         const topThree = sortedDamagers.slice(0, 3).map(p => ({ username: p[0], damage: p[1] }));
@@ -3221,8 +3117,9 @@ app.post('/api/discord-webhook', async (req, res) => {
     // Se a ação precisa de um alvo, buscamos o usuário aqui.
     let user, targetSocket;
     if (!actionsWithoutTarget.includes(action)) {
-        user = users.find(u => u.username === targetUser);
-        if (!user) return res.status(404).send(`Usuário '${targetUser}' não encontrado.`);
+        const { rows: [foundUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [targetUser]);
+        if (!foundUser) return res.status(404).send(`Usuário '${targetUser}' não encontrado.`);
+        user = foundUser;
         const targetConnection = connectedUsers.get(targetUser);
         targetSocket = targetConnection ? io.sockets.sockets.get(targetConnection.socketId) : null;
     }
@@ -3236,6 +3133,7 @@ app.post('/api/discord-webhook', async (req, res) => {
                     reason: reason || 'Nenhum motivo fornecido.',
                     expiresAt: null // Banimento permanente por padrão
                 };
+                await pool.query('UPDATE users SET status = $1, "banDetails" = $2 WHERE id = $3', [user.status, JSON.stringify(user.banDetails), user.id]);
                 if (targetSocket) {
                     targetSocket.emit('banned', user.banDetails);
                 }
@@ -3248,6 +3146,7 @@ app.post('/api/discord-webhook', async (req, res) => {
                 }
                 user.status = 'active';
                 user.banDetails = { bannedBy: null, reason: null, expiresAt: null };
+                await pool.query('UPDATE users SET status = $1, "banDetails" = $2 WHERE id = $3', [user.status, JSON.stringify(user.banDetails), user.id]);
                 if (targetSocket) {
                     targetSocket.emit('unbanned');
                 }
@@ -3267,6 +3166,7 @@ app.post('/api/discord-webhook', async (req, res) => {
             case 'change_password':
                 if (!newPassword) return res.status(400).send('Nova senha não fornecida.');
                 user.passwordHash = bcrypt.hashSync(newPassword, 10);
+                await pool.query('UPDATE users SET "passwordHash" = $1 WHERE id = $2', [user.passwordHash, user.id]);
                 res.status(200).send(`Senha do usuário '${targetUser}' foi alterada com sucesso.`);
                 break;
 
@@ -3285,6 +3185,7 @@ app.post('/api/discord-webhook', async (req, res) => {
                     } else {
                         user.rpg[statToChange] = numValue;
                     }
+                    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
                     if (targetSocket) {
                         targetSocket.emit('rpg_update', { reason: `Seu status de RPG (${statToChange}) foi alterado por um administrador.` });
                     }
@@ -3309,10 +3210,11 @@ app.post('/api/discord-webhook', async (req, res) => {
 
             case 'give_item':
                 if (!item) return res.status(400).send('Nome do item não fornecido.');
-                const swordData = ALL_WEAPONS[item];
-                if (swordData && swordData.rarity === 'supreme') {
+                const itemData = ALL_WEAPONS[item];
+                if (itemData && itemData.rarity === 'supreme') { // Apenas permite dar itens supremos por este comando
                     const swordData = itemData;
                     user.rpg.inventory.push({ itemId: swordData.id, name: swordData.name, description: swordData.description, type: 'weapon', rarity: swordData.rarity, effects: swordData.effects, quantity: 1 });
+                    await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
                     if (targetSocket) {
                         targetSocket.emit('rpg_update', { reason: `Você recebeu a ${swordData.name} de um administrador!` });
                     }
@@ -3326,6 +3228,7 @@ app.post('/api/discord-webhook', async (req, res) => {
                 const luckMultiplier = parseInt(value, 10);
                 user.rpg.luckMultiplier = luckMultiplier;
                 user.rpg.luckUses = 1; // Define como um buff de uso único
+                await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(user.rpg), user.id]);
 
                 if (targetSocket) {
                     targetSocket.emit('rpg_update', {
@@ -3348,10 +3251,11 @@ app.post('/api/discord-webhook', async (req, res) => {
 
                 // Recompensa para o admin que invocou o chefe
                 if (spawnerDiscordId) {
-                    const spawnerAdmin = users.find(u => u.discordId === spawnerDiscordId);
+                    const { rows: [spawnerAdmin] } = await pool.query('SELECT * FROM users WHERE "discordId" = $1', [spawnerDiscordId]);
                     if (spawnerAdmin) {
                         spawnerAdmin.rpg.coins += 150;
                         spawnerAdmin.rpg.xp += 250;
+                        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(spawnerAdmin.rpg), spawnerAdmin.id]);
                         console.log(`Recompensa de invocação (150 moedas, 250 XP) concedida para o admin: ${spawnerAdmin.username}`);
                     }
                 }
@@ -3384,10 +3288,11 @@ app.post('/api/discord-webhook', async (req, res) => {
 
                 // Recompensa para o admin que invocou o chefe
                 if (spawnerDiscordId) {
-                    const spawnerAdmin = users.find(u => u.discordId === spawnerDiscordId);
+                    const { rows: [spawnerAdmin] } = await pool.query('SELECT * FROM users WHERE "discordId" = $1', [spawnerDiscordId]);
                     if (spawnerAdmin) {
                         spawnerAdmin.rpg.coins += 150;
                         spawnerAdmin.rpg.xp += 250;
+                        await pool.query('UPDATE users SET rpg = $1 WHERE id = $2', [JSON.stringify(spawnerAdmin.rpg), spawnerAdmin.id]);
                         console.log(`Recompensa de invocação concedida para o admin: ${spawnerAdmin.username}`);
                     }
                 }
@@ -3440,8 +3345,9 @@ app.post('/api/support/tickets', optionalAuthMiddleware, async (req, res) => {
     tickets.unshift(newTicket);
 
     // Notificar todos os admins conectados em tempo real
-    users.forEach(user => {
-        if (user.isAdmin && connectedUsers.has(user.username)) {
+    const { rows: adminUsers } = await pool.query('SELECT username FROM users WHERE "isAdmin" = true');
+    adminUsers.forEach(user => {
+        if (connectedUsers.has(user.username)) {
             const adminSocketId = connectedUsers.get(user.username).socketId;
             io.to(adminSocketId).emit('admin:newTicket', newTicket);
         }
@@ -3527,7 +3433,7 @@ app.put('/api/support/tickets/:ticketId/status', (req, res) => {
 });
 
 // --- Lógica do Chat com Socket.IO ---
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     // Autenticação e registro do socket
     const token = socket.handshake.auth.token;
     // CORREÇÃO: Usa o IP correto por trás de um proxy como o do Render
@@ -3544,7 +3450,9 @@ io.on('connection', (socket) => {
     if (token) {
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
-            user = users.find(u => u.username === decoded.username);
+            const { rows: [foundUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [decoded.username]);
+            user = foundUser;
+
             if (user) {
                 // Garante que apenas uma sessão de socket esteja ativa por usuário.
                 // Se o usuário já estiver no mapa, desconecta a sessão antiga ANTES de registrar a nova.
@@ -3558,7 +3466,7 @@ io.on('connection', (socket) => {
                     }
                 }
 
-                user.ip = ip; // ATUALIZA o IP do usuário no "banco de dados" com o IP mais recente da conexão
+                await pool.query('UPDATE users SET ip = $1 WHERE id = $2', [ip, user.id]);
                 // Join guild room if applicable
                 if (user.rpg && user.rpg.guildId) {
                     socket.join(user.rpg.guildId);
@@ -3580,7 +3488,7 @@ io.on('connection', (socket) => {
         console.log('Nenhum token fornecido para o socket, conexão anônima.');
     }
     
-    socket.on('sendMessage', (message) => {
+    socket.on('sendMessage', async (message) => {
         if (!user) {
             return; // Não permite enviar mensagem sem estar logado
         }
@@ -3620,7 +3528,7 @@ io.on('connection', (socket) => {
         // Adiciona a tag da guilda na mensagem
         let guildTag = null;
         if (user.rpg && user.rpg.guildId) {
-            const guild = guilds.find(g => g.id === user.rpg.guildId);
+            const { rows: [guild] } = await pool.query('SELECT tag FROM guilds WHERE id = $1', [user.rpg.guildId]);
             if (guild) {
                 guildTag = guild.tag;
             }
@@ -3642,7 +3550,7 @@ io.on('connection', (socket) => {
         io.emit('newMessage', messageData);
     });
 
-    socket.on('sendImageMessage', (imageUrl) => {
+    socket.on('sendImageMessage', async (imageUrl) => {
         if (!user || !user.isTester) {
             return; // Apenas testers podem enviar imagens
         }
@@ -3650,7 +3558,7 @@ io.on('connection', (socket) => {
         // Adiciona a tag da guilda na mensagem
         let guildTag = null;
         if (user.rpg && user.rpg.guildId) {
-            const guild = guilds.find(g => g.id === user.rpg.guildId);
+            const { rows: [guild] } = await pool.query('SELECT tag FROM guilds WHERE id = $1', [user.rpg.guildId]);
             if (guild) {
                 guildTag = guild.tag;
             }
@@ -3668,10 +3576,10 @@ io.on('connection', (socket) => {
         io.emit('newMessage', messageData);
     });
 
-    socket.on('sendGuildMessage', (message) => {
+    socket.on('sendGuildMessage', async (message) => {
         if (!user || !user.rpg.guildId) return;
 
-        const guild = guilds.find(g => g.id === user.rpg.guildId);
+        const { rows: [guild] } = await pool.query('SELECT * FROM guilds WHERE id = $1', [user.rpg.guildId]);
         if (!guild) return;
 
         // Check if muted
@@ -3693,7 +3601,7 @@ io.on('connection', (socket) => {
         io.to(guild.id).emit('newGuildMessage', messageData);
     });
 
-    socket.on('adminKickUser', ({ username }) => {
+    socket.on('adminKickUser', async ({ username }) => {
         // 1. Verifica se o usuário que está enviando o evento é um admin
         if (!user || !user.isAdmin) {
             console.log(`Tentativa de kick não autorizada por: ${user ? user.username : 'usuário desconhecido'}`);
@@ -3704,7 +3612,7 @@ io.on('connection', (socket) => {
         const targetConnection = connectedUsers.get(username);
         if (targetConnection) {
             const targetSocket = io.sockets.sockets.get(targetConnection.socketId);
-            const targetUser = users.find(u => u.username === username);
+            const { rows: [targetUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
 
             // 3. Impede que admins normais kickem outros admins
             if (targetUser && targetUser.isAdmin && !user.isSupremeAdmin) {
@@ -3741,7 +3649,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('kickUserByIp', (ipToKick) => {
+    socket.on('kickUserByIp', async (ipToKick) => {
         if (!user || !user.isTester) {
             return; // Apenas testers podem kickar
         }
@@ -3755,7 +3663,7 @@ io.on('connection', (socket) => {
         for (const [username, connectionData] of connectedUsers.entries()) {
             if (connectionData.ip === ipToKick) {
                 const targetSocket = io.sockets.sockets.get(connectionData.socketId);
-                const targetUser = users.find(u => u.username === username);
+                const { rows: [targetUser] } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
 
                 // Não permite que testers kickem admins ou outros testers
                 if (targetSocket && targetUser && !targetUser.isAdmin && !targetUser.isTester) {
